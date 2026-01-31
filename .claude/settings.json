@@ -1,0 +1,38 @@
+{
+  "skills": [
+    {
+      "name": "backend",
+      "description": "FastAPI backend development - routes, services, middleware, dependencies",
+      "path": ".claude/skills/backend.md"
+    },
+    {
+      "name": "model",
+      "description": "Database models, JSON Schema, migrations, SQLModel, Alembic",
+      "path": ".claude/skills/model.md"
+    },
+    {
+      "name": "admin",
+      "description": "Streamlit admin UI - pages, components, authentication, PII masking",
+      "path": ".claude/skills/admin.md"
+    },
+    {
+      "name": "voice",
+      "description": "Voice pipeline - STT (Deepgram), LLM (Groq), TTS (Piper/Edge), telephony (Plivo)",
+      "path": ".claude/skills/voice.md"
+    },
+    {
+      "name": "api",
+      "description": "API endpoints, CRUD generation with fastapi-crudrouter, OpenAPI",
+      "path": ".claude/skills/api.md"
+    }
+  ],
+  "context": {
+    "always_include": [
+      "docs/TECH_STACK.md",
+      "docs/PRD.md"
+    ],
+    "project_type": "voice-bot-platform",
+    "language": "python",
+    "framework": "fastapi"
+  }
+}
