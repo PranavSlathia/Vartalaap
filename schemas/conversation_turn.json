@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ConversationTurn",
+  "type": "object",
+  "required": ["turn_id", "speaker", "timestamp", "transcript"],
+  "properties": {
+    "turn_id": {"type": "integer"},
+    "speaker": {"type": "string", "enum": ["caller", "bot"]},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "transcript": {"type": "string"},
+    "detected_language": {"type": "string"},
+    "intent": {"type": "string"},
+    "entities": {"type": "object"},
+    "response_latency_ms": {"type": "integer"}
+  }
+}

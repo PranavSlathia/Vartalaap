@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CallerPreferences",
+  "type": "object",
+  "required": ["caller_id_hash"],
+  "properties": {
+    "id": {"type": "string"},
+    "caller_id_hash": {"type": "string"},
+    "language_preference": {"type": "string"},
+    "whatsapp_opt_out": {"type": "boolean", "default": false},
+    "last_seen": {"type": "string", "format": "date-time"}
+  }
+}

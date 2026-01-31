@@ -1,0 +1,19 @@
+# Main API domain
+vartalaap.yourdomain.com {
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    handle /ws/* {
+        reverse_proxy api:8000
+    }
+
+    handle {
+        reverse_proxy api:8000
+    }
+}
+
+# Admin panel on subdomain
+admin.vartalaap.yourdomain.com {
+    reverse_proxy admin:8501
+}

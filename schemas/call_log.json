@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CallLog",
+  "type": "object",
+  "required": ["business_id", "call_start", "outcome"],
+  "properties": {
+    "id": {"type": "string"},
+    "business_id": {"type": "string"},
+    "caller_id_hash": {"type": "string"},
+    "call_start": {"type": "string", "format": "date-time"},
+    "call_end": {"type": "string", "format": "date-time"},
+    "duration_seconds": {"type": "integer"},
+    "detected_language": {"type": "string"},
+    "transcript": {"type": "string"},
+    "extracted_info": {"type": "string"},
+    "outcome": {"type": "string"},
+    "consent_type": {"type": "string"},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

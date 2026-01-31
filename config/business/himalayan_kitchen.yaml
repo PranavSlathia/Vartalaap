@@ -1,0 +1,21 @@
+business:
+  name: "Himalayan Kitchen"
+  type: "restaurant"
+  timezone: "Asia/Kolkata"
+  operating_hours:
+    monday: "closed"
+    tuesday: "11:00-22:30"
+    wednesday: "11:00-22:30"
+    thursday: "11:00-22:30"
+    friday: "11:00-22:30"
+    saturday: "11:00-22:30"
+    sunday: "11:00-22:30"
+
+reservation_rules:
+  min_advance_booking_mins: 30
+  max_advance_booking_days: 30
+  max_phone_party_size: 10
+  min_party_size: 1
+  total_seats: 40
+  dining_window_mins: 90
+  buffer_between_bookings_mins: 15

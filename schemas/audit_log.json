@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AuditLog",
+  "description": "Audit trail for admin actions",
+  "type": "object",
+  "required": ["action"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier (UUID as string)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the action occurred"
+    },
+    "action": {
+      "type": "string",
+      "enum": ["config_update", "reservation_cancel", "reservation_modify", "data_export", "data_purge", "login", "logout"],
+      "description": "Type of action performed"
+    },
+    "admin_user": {
+      "type": "string",
+      "description": "Username who performed action"
+    },
+    "details": {
+      "type": "string",
+      "description": "JSON string with before/after values"
+    },
+    "ip_address": {
+      "type": "string",
+      "description": "IP address of admin"
+    }
+  }
+}

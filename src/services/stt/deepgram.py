@@ -1,0 +1,1 @@
+# Deepgram STT integration placeholder.

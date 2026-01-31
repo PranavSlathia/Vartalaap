@@ -1,100 +1,20 @@
-# Environment and secrets
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-secrets/
-
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
+*.pyc
+*.pyo
+*.pyd
 .venv/
-venv/
-ENV/
-env/
-
-# uv
-.uv/
-
-# Testing
-.coverage
-htmlcov/
-.tox/
-.nox/
 .pytest_cache/
-.ward/
-
-# Type checking
 .mypy_cache/
-.dmypy.json
-dmypy.json
+.ruff_cache/
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
+# Env
+.env
+.env.*
+
+# Data/logs
+/data/
+/logs/
+
+# OS
 .DS_Store
-
-# Data and logs (runtime generated)
-data/*.db
-data/*.sqlite
-data/*.sqlite3
-logs/*.log
-logs/*.log.*
-
-# Keep directory structure
-!data/.gitkeep
-!logs/.gitkeep
-
-# Generated files
-src/schemas/_generated.py
-docs/er_diagram.png
-docs/er_diagram.svg
-
-# Alembic (keep structure, ignore temp files)
-migrations/versions/__pycache__/
-
-# TTS models (large files)
-models/
-*.onnx
-*.bin
-
-# Audio files (test recordings)
-*.wav
-*.mp3
-*.ogg
-*.flac
-
-# Jupyter notebooks checkpoints
-.ipynb_checkpoints/
-
-# Distribution
-*.tar.gz
-*.zip
-
-# OS files
-Thumbs.db
-ehthumbs.db

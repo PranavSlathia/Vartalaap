@@ -1,13 +1,8 @@
 [project]
 name = "vartalaap"
 version = "0.1.0"
-description = "Voice bot platform for local Indian businesses"
-readme = "CLAUDE.md"
+description = "Voice bot platform for local businesses"
 requires-python = ">=3.12,<3.13"
-license = { text = "MIT" }
-authors = [{ name = "Pronav Slathia" }]
-keywords = ["voice-bot", "fastapi", "hindi", "restaurant", "telephony"]
-
 dependencies = [
     # Web Framework
     "fastapi>=0.115.0,<0.116",
@@ -22,16 +17,16 @@ dependencies = [
     # Voice Pipeline
     "deepgram-sdk>=3.7.0,<4",
     "piper-tts>=1.2.0,<2",
-    "edge-tts>=6.1.0,<7",  # Feature-flagged fallback
+    "edge-tts>=6.1.0,<7",
     "groq>=0.13.0,<1",
-    "plivo>=4.60.0,<5",
+    "plivo>=4.55.0,<5",
 
     # Audio Processing
     "soundfile>=0.12.0,<0.13",
     "soxr>=0.5.0,<0.6",
     "numpy>=2.0.0,<3",
 
-    # Background Tasks (arq handles both tasks + cron)
+    # Background Tasks
     "arq>=0.26.0,<0.27",
     "redis[hiredis]>=5.0.0,<6",
 
@@ -59,27 +54,25 @@ admin = [
     "streamlit-extras>=0.4.0,<0.5",
     "streamlit-authenticator>=0.3.0,<0.4",
 ]
+
 dev = [
     # Code Quality
     "ruff>=0.8.0",
     "mypy>=1.14.0",
     "pre-commit>=4.0.0",
+
     # Testing
-    "ward>=0.68.0",
+    "ward>=0.67.0",
     "pytest-asyncio>=0.24.0",
     "coverage>=7.0.0",
-    "httpx>=0.27.0",  # For testing FastAPI
-    # Code Generation (dev-only tools)
-    "datamodel-code-generator>=0.26.0,<0.27",  # Pydantic from JSON Schema
-    "eralchemy2>=1.4.0,<2",                     # ER diagrams from SQLModel
-    # Local Development
-    "sounddevice>=0.5.0,<0.6",                 # Local mic testing only
-]
 
-[project.urls]
-Homepage = "https://github.com/PranavSlathia/Vartalaap"
-Repository = "https://github.com/PranavSlathia/Vartalaap"
-Documentation = "https://github.com/PranavSlathia/Vartalaap#readme"
+    # Code Generation (dev-only tools)
+    "datamodel-code-generator>=0.26.0,<0.27",
+    # "eralchemy2>=1.4.0,<2",  # Requires graphviz system library
+
+    # Local Development
+    "sounddevice>=0.5.0,<0.6",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -88,73 +81,15 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
-# =============================================================================
-# Ruff - Linting & Formatting
-# =============================================================================
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["src", "admin", "tests"]
-
-[tool.ruff.lint]
-select = [
-    "E",    # pycodestyle errors
-    "F",    # Pyflakes
-    "I",    # isort
-    "N",    # pep8-naming
-    "W",    # pycodestyle warnings
-    "UP",   # pyupgrade
-    "B",    # flake8-bugbear
-    "C4",   # flake8-comprehensions
-    "SIM",  # flake8-simplify
-    "ASYNC", # flake8-async
-]
-ignore = [
-    "E501",  # Line too long (handled by formatter)
-]
-
-[tool.ruff.lint.isort]
-known-first-party = ["src", "admin"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 
 [tool.ruff.format]
 quote-style = "double"
-indent-style = "space"
 
-# =============================================================================
-# MyPy - Type Checking
-# =============================================================================
 [tool.mypy]
 python_version = "3.12"
 warn_return_any = true
 warn_unused_ignores = true
-disallow_untyped_defs = false  # Gradually enable
-check_untyped_defs = true
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_defs = false
-
-# =============================================================================
-# Ward - Testing
-# =============================================================================
-[tool.ward]
-path = ["tests"]
-
-# =============================================================================
-# Coverage
-# =============================================================================
-[tool.coverage.run]
-source = ["src"]
-branch = true
-omit = [
-    "src/schemas/*",  # Generated files
-    "*/__init__.py",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "if TYPE_CHECKING:",
-    "raise NotImplementedError",
-]
