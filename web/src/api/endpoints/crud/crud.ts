@@ -38,10 +38,12 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * List reservations with optional filters.
+
+Security: business_id is required to prevent cross-tenant data access.
  * @summary List Reservations
  */
 export const listReservationsApiReservationsGet = (
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: SecondParameter<typeof customInstance>,
   signal?: AbortSignal,
 ) => {
@@ -61,7 +63,7 @@ export const getListReservationsApiReservationsGetQueryOptions = <
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -101,7 +103,7 @@ export function useListReservationsApiReservationsGet<
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params: undefined | ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -128,7 +130,7 @@ export function useListReservationsApiReservationsGet<
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -155,7 +157,7 @@ export function useListReservationsApiReservationsGet<
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -178,7 +180,7 @@ export function useListReservationsApiReservationsGet<
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -212,7 +214,7 @@ export const getListReservationsApiReservationsGetSuspenseQueryOptions = <
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -252,7 +254,7 @@ export function useListReservationsApiReservationsGetSuspense<
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params: undefined | ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options: {
     query: Partial<
       UseSuspenseQueryOptions<
@@ -271,7 +273,7 @@ export function useListReservationsApiReservationsGetSuspense<
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -290,7 +292,7 @@ export function useListReservationsApiReservationsGetSuspense<
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -313,7 +315,7 @@ export function useListReservationsApiReservationsGetSuspense<
   TData = Awaited<ReturnType<typeof listReservationsApiReservationsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListReservationsApiReservationsGetParams,
+  params: ListReservationsApiReservationsGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<

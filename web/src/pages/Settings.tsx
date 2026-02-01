@@ -193,7 +193,32 @@ export function Settings() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Failed to save: {updateMutation.error.message}
+            <strong>Failed to save:</strong>{' '}
+            {(() => {
+              const err = updateMutation.error as { response?: { data?: { detail?: string | Array<{ loc: string[]; msg: string }> } } };
+              const detail = err.response?.data?.detail;
+
+              // Handle FastAPI validation errors (array of {loc, msg})
+              if (Array.isArray(detail)) {
+                return (
+                  <ul className="list-disc list-inside mt-1">
+                    {detail.map((d, i) => (
+                      <li key={i}>
+                        <strong>{d.loc.join(' → ')}:</strong> {d.msg}
+                      </li>
+                    ))}
+                  </ul>
+                );
+              }
+
+              // Handle string error message
+              if (typeof detail === 'string') {
+                return detail;
+              }
+
+              // Fallback to generic message
+              return updateMutation.error.message || 'Unknown error';
+            })()}
           </AlertDescription>
         </Alert>
       )}

@@ -2,6 +2,7 @@ import axios from 'axios';
 import type { AxiosRequestConfig, AxiosError } from 'axios';
 import { User } from 'oidc-client-ts';
 import { getOidcStorageKey } from '@/lib/auth';
+import { getBusinessId } from '@/lib/business';
 
 const AXIOS_INSTANCE = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
@@ -22,12 +23,23 @@ const getUser = (): User | null => {
   }
 };
 
-// Add access token to requests
+// Add access token and X-Business-ID to requests
 AXIOS_INSTANCE.interceptors.request.use((config) => {
   const user = getUser();
   if (user?.access_token) {
     config.headers.Authorization = `Bearer ${user.access_token}`;
   }
+
+  // Add X-Business-ID header for tenant isolation
+  // Required by /api/business endpoints for authentication
+  try {
+    const businessId = getBusinessId();
+    config.headers['X-Business-ID'] = businessId;
+  } catch {
+    // getBusinessId throws in production if not configured
+    // Let the request proceed - API will return 401
+  }
+
   return config;
 });
 

@@ -8,7 +8,10 @@
 import type { ReservationStatus } from "./reservationStatus";
 
 export type ListReservationsApiReservationsGetParams = {
-  business_id?: string | null;
+  /**
+   * Required for tenant isolation
+   */
+  business_id: string;
   status?: ReservationStatus | null;
   date_from?: string | null;
   date_to?: string | null;

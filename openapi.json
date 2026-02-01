@@ -178,24 +178,19 @@
           "Reservations"
         ],
         "summary": "List Reservations",
-        "description": "List reservations with optional filters.",
+        "description": "List reservations with optional filters.\n\nSecurity: business_id is required to prevent cross-tenant data access.",
         "operationId": "list_reservations_api_reservations_get",
         "parameters": [
           {
             "name": "business_id",
             "in": "query",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
+              "description": "Required for tenant isolation",
               "title": "Business Id"
-            }
+            },
+            "description": "Required for tenant isolation"
           },
           {
             "name": "status",
@@ -478,24 +473,19 @@
           "Knowledge"
         ],
         "summary": "List Knowledge Items",
-        "description": "List knowledge items with optional filters.",
+        "description": "List knowledge items with optional filters.\n\nSecurity: business_id is required to prevent cross-tenant data access.",
         "operationId": "list_knowledge_items_api_knowledge_get",
         "parameters": [
           {
             "name": "business_id",
             "in": "query",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
+              "description": "Required for tenant isolation",
               "title": "Business Id"
-            }
+            },
+            "description": "Required for tenant isolation"
           },
           {
             "name": "category",
@@ -847,24 +837,19 @@
           "Call Logs"
         ],
         "summary": "List Call Logs",
-        "description": "List call logs with optional filters.",
+        "description": "List call logs with optional filters.\n\nSecurity: business_id is required to prevent cross-tenant data access.",
         "operationId": "list_call_logs_api_call_logs_get",
         "parameters": [
           {
             "name": "business_id",
             "in": "query",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
+              "description": "Required for tenant isolation",
               "title": "Business Id"
-            }
+            },
+            "description": "Required for tenant isolation"
           },
           {
             "name": "outcome",
@@ -975,24 +960,19 @@
           "Call Logs"
         ],
         "summary": "Get Call Log Summary",
-        "description": "Get summary statistics for call logs.",
+        "description": "Get summary statistics for call logs.\n\nSecurity: business_id is required to prevent cross-tenant data access.",
         "operationId": "get_call_log_summary_api_call_logs_summary_get",
         "parameters": [
           {
             "name": "business_id",
             "in": "query",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
+              "description": "Required for tenant isolation",
               "title": "Business Id"
-            }
+            },
+            "description": "Required for tenant isolation"
           },
           {
             "name": "date_from",
@@ -1104,7 +1084,7 @@
           "business"
         ],
         "summary": "Get Business",
-        "description": "Get business settings by ID.",
+        "description": "Get business settings by ID.\n\nRequires X-Business-ID header matching the requested business_id.",
         "operationId": "get_business_api_business__business_id__get",
         "parameters": [
           {
@@ -1114,6 +1094,38 @@
             "schema": {
               "type": "string",
               "title": "Business Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -1146,7 +1158,7 @@
           "business"
         ],
         "summary": "Update Business",
-        "description": "Update business settings.",
+        "description": "Update business settings.\n\nRequires X-Business-ID header matching the requested business_id.",
         "operationId": "update_business_api_business__business_id__patch",
         "parameters": [
           {
@@ -1156,6 +1168,38 @@
             "schema": {
               "type": "string",
               "title": "Business Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -1186,33 +1230,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/business": {
-      "get": {
-        "tags": [
-          "Business",
-          "business"
-        ],
-        "summary": "List Businesses",
-        "description": "List all businesses.",
-        "operationId": "list_businesses_api_business_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/BusinessResponse"
-                  },
-                  "type": "array",
-                  "title": "Response List Businesses Api Business Get"
                 }
               }
             }

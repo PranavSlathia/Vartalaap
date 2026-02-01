@@ -7,7 +7,10 @@
  */
 
 export type GetCallLogSummaryApiCallLogsSummaryGetParams = {
-  business_id?: string | null;
+  /**
+   * Required for tenant isolation
+   */
+  business_id: string;
   date_from?: string | null;
   date_to?: string | null;
 };

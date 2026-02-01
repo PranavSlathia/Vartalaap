@@ -8,7 +8,10 @@
 import type { KnowledgeCategory } from "./knowledgeCategory";
 
 export type ListKnowledgeItemsApiKnowledgeGetParams = {
-  business_id?: string | null;
+  /**
+   * Required for tenant isolation
+   */
+  business_id: string;
   category?: KnowledgeCategory | null;
   is_active?: boolean | null;
   /**

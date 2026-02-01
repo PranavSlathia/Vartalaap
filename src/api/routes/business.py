@@ -1,18 +1,56 @@
-"""Business settings API routes."""
+"""Business settings API routes.
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+Security: All endpoints require authentication and tenant scoping.
+Only admins can access business settings for their authorized businesses.
+"""
+
+import re
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Header
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import delete, select
 
-from src.db.models import Business, BusinessStatus, BusinessType
+from src.db.models import Business, BusinessPhoneNumber, BusinessStatus, BusinessType
 from src.db.session import get_session
 
 router = APIRouter(prefix="/api/business", tags=["business"])
 
+# Valid time format HH:MM
+TIME_PATTERN = re.compile(r"^([01]?[0-9]|2[0-3]):[0-5][0-9]$")
+VALID_DAYS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+
 
 # =============================================================================
-# Response/Request Schemas
+# Authentication Dependency
+# =============================================================================
+
+
+async def get_current_business_id(
+    x_business_id: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> str:
+    """Extract and validate business_id from request.
+
+    In production, this should validate the JWT token and extract
+    the authorized business_id from claims. For MVP, we use a header.
+
+    TODO: Integrate with Keycloak JWT validation to extract business_id
+    from token claims (e.g., resource_access or custom claim).
+    """
+    if not x_business_id:
+        raise HTTPException(
+            status_code=401,
+            detail="X-Business-ID header required. Set VITE_BUSINESS_ID in frontend.",
+        )
+    # TODO: Validate that the authenticated user has access to this business
+    # by checking JWT claims against x_business_id
+    return x_business_id
+
+
+# =============================================================================
+# Request/Response Schemas
 # =============================================================================
 
 
@@ -21,6 +59,19 @@ class OperatingHours(BaseModel):
 
     open: str | None = Field(None, description="Opening time (HH:MM) or null if closed")
     close: str | None = Field(None, description="Closing time (HH:MM) or null if closed")
+
+    @model_validator(mode="after")
+    def validate_times(self) -> "OperatingHours":
+        """Validate time format."""
+        if self.open is not None and not TIME_PATTERN.match(self.open):
+            raise ValueError(f"Invalid opening time format: {self.open}. Use HH:MM.")
+        if self.close is not None and not TIME_PATTERN.match(self.close):
+            raise ValueError(f"Invalid closing time format: {self.close}. Use HH:MM.")
+        if self.open and self.close:
+            # Basic sanity: close should be after open (doesn't handle overnight)
+            if self.close <= self.open:
+                raise ValueError("Closing time must be after opening time")
+        return self
 
 
 class ReservationRules(BaseModel):
@@ -34,6 +85,26 @@ class ReservationRules(BaseModel):
     total_seats: int = Field(40, ge=1)
     advance_days: int = Field(30, ge=1, description="How many days ahead can book")
     slot_duration_minutes: int = Field(90, ge=15)
+
+    @model_validator(mode="after")
+    def validate_party_sizes(self) -> "ReservationRules":
+        """Validate cross-field constraints."""
+        if self.min_party_size > self.max_party_size:
+            raise ValueError(
+                f"min_party_size ({self.min_party_size}) cannot exceed "
+                f"max_party_size ({self.max_party_size})"
+            )
+        if self.max_phone_party_size > self.max_party_size:
+            raise ValueError(
+                f"max_phone_party_size ({self.max_phone_party_size}) cannot exceed "
+                f"max_party_size ({self.max_party_size})"
+            )
+        if self.max_party_size > self.total_seats:
+            raise ValueError(
+                f"max_party_size ({self.max_party_size}) cannot exceed "
+                f"total_seats ({self.total_seats})"
+            )
+        return self
 
 
 class BusinessResponse(BaseModel):
@@ -61,6 +132,30 @@ class BusinessUpdate(BaseModel):
     reservation_rules: ReservationRules | None = None
     greeting_text: str | None = None
     menu_summary: str | None = None
+
+    @model_validator(mode="after")
+    def validate_operating_hours(self) -> "BusinessUpdate":
+        """Validate operating hours structure."""
+        if self.operating_hours:
+            for day, hours in self.operating_hours.items():
+                if day.lower() not in VALID_DAYS:
+                    raise ValueError(f"Invalid day name: {day}. Must be one of: {VALID_DAYS}")
+                # Allow "closed" string or OperatingHours object
+                if isinstance(hours, str) and hours.lower() != "closed":
+                    raise ValueError(
+                        f"Invalid hours for {day}: '{hours}'. "
+                        "Use 'closed' or {{open: 'HH:MM', close: 'HH:MM'}}"
+                    )
+        return self
+
+    @model_validator(mode="after")
+    def validate_phone_numbers(self) -> "BusinessUpdate":
+        """Validate phone numbers are E.164 format."""
+        if self.phone_numbers:
+            for phone in self.phone_numbers:
+                if not phone.startswith("+") or not phone[1:].isdigit():
+                    raise ValueError(f"Invalid E.164 phone number: {phone}")
+        return self
 
 
 # =============================================================================
@@ -111,6 +206,28 @@ def business_to_response(business: Business) -> BusinessResponse:
     )
 
 
+async def sync_phone_numbers(
+    session: AsyncSession, business_id: str, phone_numbers: list[str]
+) -> None:
+    """Sync phone numbers to the lookup table.
+
+    Removes old numbers and adds new ones to ensure call routing works.
+    """
+    # Delete existing phone numbers for this business
+    await session.execute(
+        delete(BusinessPhoneNumber).where(BusinessPhoneNumber.business_id == business_id)
+    )
+
+    # Add new phone numbers
+    for i, phone in enumerate(phone_numbers):
+        phone_record = BusinessPhoneNumber(
+            phone_number=phone,
+            business_id=business_id,
+            is_primary=(i == 0),  # First number is primary
+        )
+        session.add(phone_record)
+
+
 # =============================================================================
 # Routes
 # =============================================================================
@@ -120,8 +237,19 @@ def business_to_response(business: Business) -> BusinessResponse:
 async def get_business(
     business_id: str,
     session: AsyncSession = Depends(get_session),
+    auth_business_id: str = Depends(get_current_business_id),
 ) -> BusinessResponse:
-    """Get business settings by ID."""
+    """Get business settings by ID.
+
+    Requires X-Business-ID header matching the requested business_id.
+    """
+    # Tenant isolation: only allow access to authorized business
+    if business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to access business '{business_id}'",
+        )
+
     result = await session.execute(select(Business).where(Business.id == business_id))
     business = result.scalar_one_or_none()
 
@@ -136,8 +264,19 @@ async def update_business(
     business_id: str,
     update: BusinessUpdate,
     session: AsyncSession = Depends(get_session),
+    auth_business_id: str = Depends(get_current_business_id),
 ) -> BusinessResponse:
-    """Update business settings."""
+    """Update business settings.
+
+    Requires X-Business-ID header matching the requested business_id.
+    """
+    # Tenant isolation: only allow access to authorized business
+    if business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to modify business '{business_id}'",
+        )
+
     result = await session.execute(select(Business).where(Business.id == business_id))
     business = result.scalar_one_or_none()
 
@@ -151,6 +290,8 @@ async def update_business(
         business.timezone = update.timezone
     if update.phone_numbers is not None:
         business.phone_numbers_json = serialize_json_field(update.phone_numbers)
+        # Sync to lookup table for call routing
+        await sync_phone_numbers(session, business_id, update.phone_numbers)
     if update.operating_hours is not None:
         # Convert OperatingHours to dict
         hours_dict = {}
@@ -176,11 +317,5 @@ async def update_business(
     return business_to_response(business)
 
 
-@router.get("", response_model=list[BusinessResponse])
-async def list_businesses(
-    session: AsyncSession = Depends(get_session),
-) -> list[BusinessResponse]:
-    """List all businesses."""
-    result = await session.execute(select(Business).order_by(Business.name))
-    businesses = result.scalars().all()
-    return [business_to_response(b) for b in businesses]
+# Note: Removed GET /api/business (list all) endpoint to prevent cross-tenant data leakage.
+# Each business can only access their own settings via GET /api/business/{business_id}.

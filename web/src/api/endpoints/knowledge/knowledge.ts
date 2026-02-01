@@ -40,10 +40,12 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * List knowledge items with optional filters.
+
+Security: business_id is required to prevent cross-tenant data access.
  * @summary List Knowledge Items
  */
 export const listKnowledgeItemsApiKnowledgeGet = (
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: SecondParameter<typeof customInstance>,
   signal?: AbortSignal,
 ) => {
@@ -63,7 +65,7 @@ export const getListKnowledgeItemsApiKnowledgeGetQueryOptions = <
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -103,7 +105,7 @@ export function useListKnowledgeItemsApiKnowledgeGet<
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params: undefined | ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -130,7 +132,7 @@ export function useListKnowledgeItemsApiKnowledgeGet<
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -157,7 +159,7 @@ export function useListKnowledgeItemsApiKnowledgeGet<
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -180,7 +182,7 @@ export function useListKnowledgeItemsApiKnowledgeGet<
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -214,7 +216,7 @@ export const getListKnowledgeItemsApiKnowledgeGetSuspenseQueryOptions = <
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -254,7 +256,7 @@ export function useListKnowledgeItemsApiKnowledgeGetSuspense<
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params: undefined | ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options: {
     query: Partial<
       UseSuspenseQueryOptions<
@@ -273,7 +275,7 @@ export function useListKnowledgeItemsApiKnowledgeGetSuspense<
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -292,7 +294,7 @@ export function useListKnowledgeItemsApiKnowledgeGetSuspense<
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -315,7 +317,7 @@ export function useListKnowledgeItemsApiKnowledgeGetSuspense<
   TData = Awaited<ReturnType<typeof listKnowledgeItemsApiKnowledgeGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListKnowledgeItemsApiKnowledgeGetParams,
+  params: ListKnowledgeItemsApiKnowledgeGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<

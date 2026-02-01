@@ -77,18 +77,21 @@ class ReservationResponse(BaseModel):
 @router.get("", response_model=list[ReservationResponse])
 async def list_reservations(
     session: AsyncSession = Depends(get_session),
-    business_id: str | None = Query(None),
+    business_id: str = Query(..., description="Required for tenant isolation"),
     status: ReservationStatus | None = Query(None),
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
 ) -> list[ReservationResponse]:
-    """List reservations with optional filters."""
+    """List reservations with optional filters.
+
+    Security: business_id is required to prevent cross-tenant data access.
+    """
     query = select(Reservation)
 
-    if business_id:
-        query = query.where(Reservation.business_id == business_id)  # type: ignore[arg-type]
+    # Required: always scope by business_id
+    query = query.where(Reservation.business_id == business_id)  # type: ignore[arg-type]
     if status:
         query = query.where(Reservation.status == status)  # type: ignore[arg-type]
     if date_from:

@@ -35,10 +35,12 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
  * List call logs with optional filters.
+
+Security: business_id is required to prevent cross-tenant data access.
  * @summary List Call Logs
  */
 export const listCallLogsApiCallLogsGet = (
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: SecondParameter<typeof customInstance>,
   signal?: AbortSignal,
 ) => {
@@ -58,7 +60,7 @@ export const getListCallLogsApiCallLogsGetQueryOptions = <
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -97,7 +99,7 @@ export function useListCallLogsApiCallLogsGet<
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params: undefined | ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -124,7 +126,7 @@ export function useListCallLogsApiCallLogsGet<
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -151,7 +153,7 @@ export function useListCallLogsApiCallLogsGet<
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -174,7 +176,7 @@ export function useListCallLogsApiCallLogsGet<
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -208,7 +210,7 @@ export const getListCallLogsApiCallLogsGetSuspenseQueryOptions = <
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -247,7 +249,7 @@ export function useListCallLogsApiCallLogsGetSuspense<
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params: undefined | ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options: {
     query: Partial<
       UseSuspenseQueryOptions<
@@ -266,7 +268,7 @@ export function useListCallLogsApiCallLogsGetSuspense<
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -285,7 +287,7 @@ export function useListCallLogsApiCallLogsGetSuspense<
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -308,7 +310,7 @@ export function useListCallLogsApiCallLogsGetSuspense<
   TData = Awaited<ReturnType<typeof listCallLogsApiCallLogsGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: ListCallLogsApiCallLogsGetParams,
+  params: ListCallLogsApiCallLogsGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -342,10 +344,12 @@ export function useListCallLogsApiCallLogsGetSuspense<
 
 /**
  * Get summary statistics for call logs.
+
+Security: business_id is required to prevent cross-tenant data access.
  * @summary Get Call Log Summary
  */
 export const getCallLogSummaryApiCallLogsSummaryGet = (
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: SecondParameter<typeof customInstance>,
   signal?: AbortSignal,
 ) => {
@@ -365,7 +369,7 @@ export const getGetCallLogSummaryApiCallLogsSummaryGetQueryOptions = <
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -405,7 +409,7 @@ export function useGetCallLogSummaryApiCallLogsSummaryGet<
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params: undefined | GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -432,7 +436,7 @@ export function useGetCallLogSummaryApiCallLogsSummaryGet<
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -459,7 +463,7 @@ export function useGetCallLogSummaryApiCallLogsSummaryGet<
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -482,7 +486,7 @@ export function useGetCallLogSummaryApiCallLogsSummaryGet<
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -516,7 +520,7 @@ export const getGetCallLogSummaryApiCallLogsSummaryGetSuspenseQueryOptions = <
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -557,7 +561,7 @@ export function useGetCallLogSummaryApiCallLogsSummaryGetSuspense<
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params: undefined | GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options: {
     query: Partial<
       UseSuspenseQueryOptions<
@@ -576,7 +580,7 @@ export function useGetCallLogSummaryApiCallLogsSummaryGetSuspense<
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -595,7 +599,7 @@ export function useGetCallLogSummaryApiCallLogsSummaryGetSuspense<
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
@@ -618,7 +622,7 @@ export function useGetCallLogSummaryApiCallLogsSummaryGetSuspense<
   TData = Awaited<ReturnType<typeof getCallLogSummaryApiCallLogsSummaryGet>>,
   TError = ErrorType<HTTPValidationError>,
 >(
-  params?: GetCallLogSummaryApiCallLogsSummaryGetParams,
+  params: GetCallLogSummaryApiCallLogsSummaryGetParams,
   options?: {
     query?: Partial<
       UseSuspenseQueryOptions<
