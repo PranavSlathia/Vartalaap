@@ -440,6 +440,22 @@ async def retry_failed_whatsapp(ctx) -> None:
                 followup.sent_at = datetime.now(UTC)
 
 
+def _get_redis_settings():
+    """Get Redis settings from REDIS_URL environment variable."""
+    import os
+    from urllib.parse import urlparse
+
+    from arq.connections import RedisSettings
+
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    parsed = urlparse(redis_url)
+    return RedisSettings(
+        host=parsed.hostname or "localhost",
+        port=parsed.port or 6379,
+        database=int(parsed.path.lstrip("/") or "0"),
+    )
+
+
 class WorkerSettings:
     functions = [
         send_whatsapp_followup,
@@ -451,3 +467,4 @@ class WorkerSettings:
         cron(purge_old_records, hour=3, minute=0),
         cron(retry_failed_whatsapp, minute=0),
     ]
+    redis_settings = _get_redis_settings()

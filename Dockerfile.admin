@@ -5,6 +5,9 @@ WORKDIR /app
 # Install uv - pin specific version for reproducibility
 COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /bin/uv
 
+# Install build dependencies for miniaudio
+RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
+
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 

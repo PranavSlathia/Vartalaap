@@ -52,6 +52,9 @@ services:
       - .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./src:/app/src  # Hot reload
+      - ./config:/app/config
     depends_on:
       - redis
     restart: unless-stopped

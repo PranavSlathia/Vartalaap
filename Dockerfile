@@ -3,7 +3,11 @@ FROM python:3.12.8-slim AS base
 WORKDIR /app
 
 # Install system deps for audio (no PortAudio needed - telephony uses WebSocket)
-RUN apt-get update && apt-get install -y     libsndfile1     ffmpeg     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    libsndfile1 \
+    ffmpeg \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install uv - pin specific version for reproducibility
 COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /bin/uv
