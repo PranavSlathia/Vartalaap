@@ -270,6 +270,146 @@ services:
       - redis_data:/data
 ```
 
+### 6.1 Transcript Analysis Agent System
+
+**Purpose:** Internal QA tooling for reviewing call transcripts and identifying improvement opportunities.
+
+| Component | Choice | Version | Rationale |
+|-----------|--------|---------|-----------|
+| **Agent Framework** | CrewAI | 0.86.x | Production-ready, Groq-native, structured outputs |
+| **LLM Integration** | langchain-groq | 0.2.x | Connect CrewAI to Groq models |
+| **Tools** | crewai-tools | 0.17.x | Built-in agent capabilities |
+
+```toml
+[project]
+dependencies = [
+    "crewai>=0.86.0,<1",
+    "crewai-tools>=0.17.0,<1",
+    "langchain-groq>=0.2.0,<1",
+]
+```
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                 Transcript Review Crew                  │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ QA Reviewer  │  │  Classifier  │  │   Improver   │  │
+│  │    Agent     │→ │    Agent     │→ │    Agent     │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                         │
+│  Agent Roles:                                           │
+│  • QA Reviewer: Rate quality (1-5), identify issues     │
+│  • Classifier: Categorize by root cause                 │
+│  • Improver: Generate actionable suggestions            │
+│                                                         │
+│  Issue Categories:                                      │
+│  • knowledge_gap    - Missing knowledge base info       │
+│  • prompt_weakness  - LLM prompt needs improvement      │
+│  • ux_issue         - User experience friction          │
+│  • stt_error        - Speech-to-text misrecognition     │
+│  • tts_issue        - Text-to-speech quality            │
+│  • config_error     - Business configuration problem    │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Data Models
+
+```python
+# src/db/models.py
+
+class TranscriptReview(SQLModel, table=True):
+    """QA review of a call transcript by AI agents."""
+    id: str = Field(primary_key=True)
+    call_log_id: str = Field(foreign_key="call_logs.id", index=True)
+    business_id: str = Field(index=True)
+    quality_score: int = Field(ge=1, le=5)  # Internal rating
+    issues_json: str | None  # JSON array of issues
+    suggestions_json: str | None  # JSON array of suggestions
+    has_unanswered_query: bool = False
+    has_knowledge_gap: bool = False
+    has_prompt_weakness: bool = False
+    has_ux_issue: bool = False
+    agent_model: str = "llama-3.3-70b-versatile"
+    review_latency_ms: float | None
+    reviewed_at: datetime
+    reviewed_by: str = "agent"  # or admin username
+
+class ImprovementSuggestion(SQLModel, table=True):
+    """Actionable suggestions from reviews."""
+    id: str = Field(primary_key=True)
+    review_id: str = Field(foreign_key="transcript_reviews.id")
+    business_id: str = Field(index=True)
+    category: IssueCategory
+    title: str = Field(max_length=200)
+    description: str = Field(max_length=2000)
+    priority: int = Field(ge=1, le=5)
+    status: SuggestionStatus = "pending"  # pending/implemented/rejected
+```
+
+#### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/reviews` | GET | List reviews for a business |
+| `/api/reviews/stats` | GET | Review statistics and trends |
+| `/api/reviews/{id}` | GET | Get specific review |
+| `/api/reviews/analyze` | POST | Trigger analysis for a call |
+| `/api/reviews/suggestions` | GET | List improvement suggestions |
+| `/api/reviews/suggestions/{id}` | PATCH | Update suggestion status |
+
+#### Worker Integration
+
+```python
+# src/worker.py
+
+async def analyze_transcript_quality(ctx, call_id: str) -> None:
+    """Background job to analyze call transcript with AI agents."""
+    from src.services.analysis import TranscriptAnalysisCrew
+
+    async with get_session_context() as session:
+        call_log = await session.get(CallLog, call_id)
+        if not call_log or not call_log.transcript:
+            return
+
+        crew = TranscriptAnalysisCrew()
+        result = await crew.analyze_transcript(call_log.transcript)
+
+        # Store review and suggestions...
+
+class WorkerSettings:
+    functions = [
+        send_whatsapp_followup,
+        process_transcript,
+        generate_call_summary,
+        analyze_transcript_quality,  # NEW
+    ]
+```
+
+#### Usage
+
+```bash
+# Queue analysis for a specific call
+curl -X POST "http://localhost:8000/api/reviews/analyze" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"call_log_id": "abc-123"}'
+
+# List pending suggestions
+curl "http://localhost:8000/api/reviews/suggestions?business_id=himalayan_kitchen&status=pending"
+
+# Mark suggestion as implemented
+curl -X PATCH "http://localhost:8000/api/reviews/suggestions/xyz-456" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"status": "implemented"}'
+```
+
+> **Note:** This is internal QA tooling for admins, not real-time or caller-facing.
+> Analysis runs asynchronously via arq worker to avoid blocking API requests.
+
 ---
 
 ## 7. Configuration & Environment
@@ -691,6 +831,11 @@ dependencies = [
 
     # CRUD Generation (runtime - used in API routes)
     "fastapi-crudrouter>=0.8.0,<0.9",
+
+    # Agent System (Transcript Analysis)
+    "crewai>=0.86.0,<1",
+    "crewai-tools>=0.17.0,<1",
+    "langchain-groq>=0.2.0,<1",
 ]
 
 [project.optional-dependencies]
@@ -1341,6 +1486,91 @@ jobs:
             echo "Run 'make migration msg=\"description\"' and commit the migration."
             exit 1
           fi
+```
+
+---
+
+## 19. Frontend (React Admin)
+
+| Component | Choice | Version | Rationale |
+|-----------|--------|---------|-----------|
+| **Framework** | React | 19.2.x | Suspense, Activity API, latest stable |
+| **Language** | TypeScript | 5.9.x | Strict typing, excellent tooling |
+| **Build** | Vite | 7.x | Fast HMR, **Requires Node 20.19+** |
+| **Data Fetching** | TanStack Query | 5.90.x | Caching, Suspense, mutations |
+| **API Client** | Orval + Axios | 7.20.x | OpenAPI → React Query codegen |
+| **Router** | react-router | 7.x | NOT react-router-dom (deprecated) |
+| **UI** | shadcn/ui | Latest | Tailwind v4, OKLCH colors |
+| **CSS** | Tailwind CSS | 4.x | tw-animate-css (not tailwindcss-animate) |
+| **Auth** | react-oidc-context | 3.x | Modern OIDC client for React 19 |
+| **Auth Backend** | Keycloak | 26.2.x | SSO, OIDC, realm management |
+
+### Critical Requirements
+
+- **Node.js 20.19+ or 22.12+** required (Vite 7 dropped Node 18)
+- **@react-keycloak/web is deprecated** (last update 2020) - use react-oidc-context
+- **react-router-dom is deprecated in v7** - import from `react-router` directly
+- **tw-animate-css** replaces tailwindcss-animate for Tailwind v4
+
+### Frontend Code Generation
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    OPENAPI → TYPESCRIPT CODEGEN                 │
+├─────────────────────────────────────────────────────────────────┤
+│  FastAPI                                                        │
+│  src/main.py                                                    │
+│      │                                                          │
+│      ▼ GET /openapi.json                                        │
+│  openapi.json  ─────────────────────────────────────────────┐   │
+│      │                                                      │   │
+│      ▼ orval generate                                       │   │
+│  web/src/api/                                               │   │
+│  ├── model.ts           # Generated types (DO NOT EDIT)     │   │
+│  ├── endpoints/         # Generated React Query hooks       │   │
+│  └── mutator/           # Custom axios instance (MANUAL)    │   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Dependencies
+
+```toml
+# web/package.json (key dependencies)
+{
+  "dependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "@tanstack/react-query": "^5.90.0",
+    "react-router": "^7.12.0",
+    "axios": "^1.7.0",
+    "oidc-client-ts": "^3.1.0",
+    "react-oidc-context": "^3.2.0",
+    "tailwindcss": "^4.0.0"
+  },
+  "devDependencies": {
+    "orval": "^7.20.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.3.0"
+  }
+}
+```
+
+### Quick Commands
+
+```bash
+# Development
+cd web && npm run dev                 # Start dev server (http://localhost:5173)
+
+# Code Generation
+uv run python scripts/export_openapi.py   # Export OpenAPI from FastAPI
+cd web && npm run generate:api            # Generate TypeScript client
+
+# Full-stack
+./scripts/generate-fullstack.sh           # Complete codegen pipeline
+
+# Quality
+cd web && npm run typecheck               # TypeScript check
+cd web && npm run build                   # Production build
 ```
 
 ---

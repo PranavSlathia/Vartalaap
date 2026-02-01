@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
@@ -246,16 +247,21 @@ class CallSession:
             TranscriptChunk with interim/final transcription results
         """
         self.total_stt_calls += 1
+        start_time = time.perf_counter()
+        first_text_received = False
 
         async for chunk in self._stt.transcribe_stream(
             audio_chunks,
             sample_rate=sample_rate,
             encoding=encoding,
         ):
-            # Track first word latency
-            if chunk.is_final and self.first_word_latencies == []:
-                # First final result
-                pass
+            # Track first word latency (time from audio start to first text)
+            if chunk.text and not first_text_received:
+                first_word_ms = (time.perf_counter() - start_time) * 1000
+                self.first_word_latencies.append(first_word_ms)
+                first_text_received = True
+                logger.debug(f"First word latency: {first_word_ms:.1f}ms")
+
             if chunk.detected_language != DetectedLanguage.UNKNOWN:
                 self.detected_language = chunk.detected_language
 
@@ -335,15 +341,23 @@ class CallSession:
             "avg_first_word_ms": avg_stt_latency,
             "p50_first_token_ms": self._percentile(self.first_token_latencies, 50),
             "p95_first_token_ms": self._percentile(self.first_token_latencies, 95),
+            "p50_first_word_ms": self._percentile(self.first_word_latencies, 50),
+            "p95_first_word_ms": self._percentile(self.first_word_latencies, 95),
         }
 
     def _percentile(self, data: list[float], p: int) -> float:
-        """Calculate percentile of latency data."""
+        """Calculate percentile using nearest-rank with linear interpolation."""
         if not data:
             return 0.0
         sorted_data = sorted(data)
-        idx = int(len(sorted_data) * p / 100)
-        return sorted_data[min(idx, len(sorted_data) - 1)]
+        n = len(sorted_data)
+        # Use (n-1) * p / 100 for proper zero-based indexing
+        idx = (n - 1) * p / 100
+        lower = int(idx)
+        upper = min(lower + 1, n - 1)
+        # Linear interpolation between adjacent values
+        weight = idx - lower
+        return sorted_data[lower] * (1 - weight) + sorted_data[upper] * weight
 
     def get_transcript(self) -> str:
         """Get conversation transcript for DB storage."""

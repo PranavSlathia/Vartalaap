@@ -13,9 +13,12 @@ from sqlalchemy import delete, select, update
 
 from src.config import get_settings
 from src.db.models import (
+    CallCategory,
     CallLog,
     FollowupStatus,
+    ImprovementSuggestion,
     Reservation,
+    TranscriptReview,
     WhatsappFollowup,
 )
 from src.db.repositories.calls import (
@@ -194,6 +197,190 @@ async def purge_old_records(ctx) -> None:
     logger.info("Purge job completed")
 
 
+async def generate_call_summary(ctx, call_id: str) -> None:
+    """Generate summary and category from call transcript using LLM.
+
+    This runs as a background job after call hangup to avoid blocking.
+    """
+    from src.services.llm.groq import GroqService
+
+    async with get_session_context() as session:
+        call_log = await session.get(CallLog, call_id)
+        if not call_log:
+            logger.warning(f"Call log not found for summary: {call_id}")
+            return
+
+        # Skip if no transcript or already summarized
+        if not call_log.transcript:
+            logger.debug(f"No transcript for call {call_id}, skipping summary")
+            return
+
+        if call_log.call_summary:
+            logger.debug(f"Call {call_id} already has summary, skipping")
+            return
+
+        try:
+            llm = GroqService()
+
+            # Build prompt for summary extraction
+            system_prompt = """You are an expert at summarizing customer service calls.
+Analyze the transcript and provide:
+1. A 1-2 sentence summary focusing on the caller's intent and outcome
+2. A category for the call
+
+Respond in JSON format:
+{
+    "summary": "Brief summary here",
+    "category": "booking|inquiry|complaint|spam|other"
+}
+
+Categories:
+- booking: Caller wanted to make/modify/cancel a reservation
+- inquiry: Caller asked about menu, hours, location, prices, etc.
+- complaint: Caller reported an issue or expressed dissatisfaction
+- spam: Unsolicited call, wrong number, or irrelevant
+- other: Doesn't fit other categories"""
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Transcript:\n{call_log.transcript}"},
+            ]
+
+            result = await llm.extract_json(
+                messages=messages,
+                max_tokens=150,
+                temperature=0.0,
+            )
+
+            # Update call log with summary
+            summary = result.get("summary", "")[:500]  # Enforce max length
+            category_str = result.get("category", "other")
+
+            # Parse category enum
+            try:
+                category = CallCategory(category_str)
+            except ValueError:
+                category = CallCategory.other
+
+            call_log.call_summary = summary
+            call_log.call_category = category
+
+            await session.commit()
+            logger.info(f"Generated summary for call {call_id}: {category.value}")
+
+            await llm.close()
+
+        except Exception as e:
+            logger.error(f"Failed to generate summary for {call_id}: {e}")
+            # Don't raise - this is a non-critical background job
+
+
+async def analyze_transcript_quality(ctx, call_id: str) -> None:
+    """Analyze call transcript quality using AI agent crew.
+
+    Runs CrewAI agents to:
+    1. Review the transcript for quality issues
+    2. Classify issues by category
+    3. Generate actionable improvement suggestions
+
+    Results are stored in transcript_reviews and improvement_suggestions tables.
+    This is internal QA tooling, not caller-facing.
+    """
+    from uuid import uuid4
+
+    from src.services.analysis.transcript_crew import TranscriptAnalysisCrew
+
+    async with get_session_context() as session:
+        call_log = await session.get(CallLog, call_id)
+        if not call_log:
+            logger.warning(f"Call log not found for analysis: {call_id}")
+            return
+
+        # Skip if no transcript
+        if not call_log.transcript:
+            logger.debug(f"No transcript for call {call_id}, skipping analysis")
+            return
+
+        # Check if already reviewed
+        existing_review = await session.execute(
+            select(TranscriptReview).where(
+                TranscriptReview.call_log_id == call_id  # type: ignore[arg-type]
+            )
+        )
+        if existing_review.scalar_one_or_none():
+            logger.debug(f"Call {call_id} already reviewed, skipping")
+            return
+
+        try:
+            # Build business context from call log
+            business_context = f"Business: {call_log.business_id}"
+            if call_log.call_category:
+                business_context += f"\nCall Category: {call_log.call_category.value}"
+            if call_log.call_summary:
+                business_context += f"\nCall Summary: {call_log.call_summary}"
+
+            # Run the analysis crew
+            crew = TranscriptAnalysisCrew()
+            result = await crew.analyze_transcript(
+                transcript=call_log.transcript,
+                business_context=business_context,
+            )
+
+            # Create transcript review record
+            review = TranscriptReview(
+                id=str(uuid4()),
+                call_log_id=call_id,
+                business_id=call_log.business_id,
+                quality_score=result.quality_score,
+                issues_json=result.to_issues_json() if result.issues else None,
+                suggestions_json=result.to_suggestions_json() if result.suggestions else None,
+                has_unanswered_query=result.has_unanswered_query,
+                has_knowledge_gap=result.has_knowledge_gap,
+                has_prompt_weakness=result.has_prompt_weakness,
+                has_ux_issue=result.has_ux_issue,
+                review_latency_ms=result.review_latency_ms,
+                reviewed_at=datetime.now(UTC),
+            )
+            session.add(review)
+
+            # Flush to detect unique constraint violation early
+            try:
+                await session.flush()
+            except Exception as flush_err:
+                # Unique constraint violation = another job already created review
+                if "UNIQUE constraint" in str(flush_err) or "unique" in str(flush_err).lower():
+                    logger.debug(f"Review already exists for {call_id} (concurrent job)")
+                    await session.rollback()  # Clean up failed session state
+                    return
+                raise
+
+            # Create improvement suggestion records
+            for suggestion in result.suggestions:
+                suggestion_record = ImprovementSuggestion(
+                    id=str(uuid4()),
+                    review_id=review.id,
+                    business_id=call_log.business_id,
+                    category=suggestion.category,
+                    title=suggestion.title,
+                    description=suggestion.description,
+                    priority=suggestion.priority,
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+                session.add(suggestion_record)
+
+            await session.commit()
+
+            logger.info(
+                f"Analyzed call {call_id}: score={result.quality_score}, "
+                f"issues={len(result.issues)}, suggestions={len(result.suggestions)}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to analyze transcript for {call_id}: {e}")
+            # Don't raise - this is a non-critical background job
+
+
 async def retry_failed_whatsapp(ctx) -> None:
     """Retry pending WhatsApp followups."""
     settings = get_settings()
@@ -254,7 +441,12 @@ async def retry_failed_whatsapp(ctx) -> None:
 
 
 class WorkerSettings:
-    functions = [send_whatsapp_followup, process_transcript]
+    functions = [
+        send_whatsapp_followup,
+        process_transcript,
+        generate_call_summary,
+        analyze_transcript_quality,
+    ]
     cron_jobs = [
         cron(purge_old_records, hour=3, minute=0),
         cron(retry_failed_whatsapp, minute=0),

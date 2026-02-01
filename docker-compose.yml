@@ -1,48 +1,206 @@
-version: "3.9"
+# Vartalaap - Master Docker Compose
+# Start everything: docker-compose up -d
+#
+# Required env files:
+#   - .env (API keys, secrets - see .env.example)
+#
+# Services:
+#   - caddy:     Reverse proxy with auto HTTPS (ports 80, 443)
+#   - api:       FastAPI backend (internal port 8000)
+#   - web:       React frontend (internal port 80)
+#   - admin:     Streamlit admin UI (internal port 8501)
+#   - worker:    arq background worker
+#   - redis:     Task queue and caching
+#   - keycloak:  Authentication server (internal port 8080)
+#   - keycloak-db: PostgreSQL for Keycloak
+#
+# Development: Use docker-compose.dev.yml for hot reload and direct port access
 
 services:
+  # ==========================================================================
+  # Reverse Proxy (Caddy - Auto HTTPS)
+  # ==========================================================================
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"       # Main app (frontend + API)
+      - "443:443"     # HTTPS (production)
+      - "8080:8080"   # Keycloak auth
+      - "8501:8501"   # Admin panel
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+      - admin
+      - keycloak
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Frontend
+  # ==========================================================================
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-http://localhost:8080}
+        VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-vartalaap}
+        VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-vartalaap-web}
+    # No port exposed - Caddy proxies to this container
+    expose:
+      - "80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================================================
+  # Backend API
+  # ==========================================================================
+
   api:
     build: .
-    ports:
-      - "8000:8000"
+    # No port exposed - Caddy proxies to this container
+    expose:
+      - "8000"
     env_file:
-      - .env.production
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+      - KEYCLOAK_URL=http://keycloak:8080
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./config:/app/config
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==========================================================================
+  # Streamlit Admin UI
+  # ==========================================================================
 
   admin:
     build:
       context: .
       dockerfile: Dockerfile.admin
-    ports:
-      - "8501:8501"
+    # No port exposed - Caddy proxies to this container
+    expose:
+      - "8501"
     env_file:
-      - .env.production
+      - .env
+    environment:
+      - KEYCLOAK_URL=http://keycloak:8080
     volumes:
       - ./data:/app/data
     depends_on:
       - api
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
+  # ==========================================================================
+  # Background Worker
+  # ==========================================================================
 
   worker:
     build: .
     command: uv run arq src.worker.WorkerSettings
     env_file:
-      - .env.production
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
     depends_on:
       - redis
     restart: unless-stopped
 
+  # ==========================================================================
+  # Infrastructure
+  # ==========================================================================
+
+  redis:
+    image: redis:7-alpine
+    # Internal only - no external access needed
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # Authentication (Keycloak)
+  # ==========================================================================
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    # No port exposed - Caddy proxies to this container
+    expose:
+      - "8080"
+    environment:
+      # Admin credentials from env file
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:-admin}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Database connection
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://keycloak-db:5432/keycloak
+      - KC_DB_USERNAME=${KC_DB_USERNAME:-keycloak}
+      - KC_DB_PASSWORD=${KC_DB_PASSWORD:-keycloak}
+      # HTTP settings
+      - KC_HOSTNAME_STRICT=false
+      - KC_HTTP_ENABLED=true
+      - KC_PROXY=edge
+    command: start-dev
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200 OK'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  keycloak-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=keycloak
+      - POSTGRES_USER=${KC_DB_USERNAME:-keycloak}
+      - POSTGRES_PASSWORD=${KC_DB_PASSWORD:-keycloak}
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USERNAME:-keycloak}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
+  caddy_data:
+  caddy_config:
   redis_data:
+  keycloak_db_data:

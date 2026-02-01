@@ -156,7 +156,7 @@ class PiperTTSService:
         text: str,
         *,
         target_sample_rate: int | None = None,
-        chunk_size_ms: int = 100,
+        chunk_size_ms: int = 50,  # Smaller chunks for faster first audio byte
     ) -> tuple[AsyncGenerator[AudioChunk, None], SynthesisMetadata]:
         """Synthesize text to streaming audio chunks.
 

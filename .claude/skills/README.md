@@ -11,6 +11,7 @@ Context-rich skills for developing the Vartalaap voice bot platform.
 | **Admin** | `/admin` | Streamlit admin pages, UI components |
 | **Voice** | `/voice` | Voice pipeline (STT, LLM, TTS, telephony) |
 | **API** | `/api` | CRUD endpoints, OpenAPI generation |
+| **Frontend** | `/frontend` | React, TypeScript, Orval codegen, OIDC auth |
 
 ## Skill Summaries
 
@@ -55,6 +56,13 @@ Context-rich skills for developing the Vartalaap voice bot platform.
 - WebSocket audio streaming
 - Health checks
 - OpenAPI documentation
+
+### /frontend
+- React 19 + TypeScript + Vite 7
+- Orval code generation (OpenAPI → React Query)
+- react-oidc-context for Keycloak auth
+- shadcn/ui + Tailwind v4
+- react-router v7 (NOT react-router-dom)
 
 ## Code Generation
 

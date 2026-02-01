@@ -11,7 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.api.routes import business, call_logs, crud, health, knowledge, metrics, plivo_webhook, voice
+from src.api.routes import (
+    business,
+    call_logs,
+    crud,
+    health,
+    knowledge,
+    metrics,
+    plivo_webhook,
+    reviews,
+    voice,
+)
 from src.api.websocket.audio_stream import audio_stream_endpoint, call_registry
 from src.config import get_settings
 from src.db.session import close_db, init_db
@@ -89,6 +99,9 @@ def create_app() -> FastAPI:
 
     # Call logs routes
     app.include_router(call_logs.router, prefix="/api", tags=["Call Logs"])
+
+    # Transcript reviews routes (QA agent system)
+    app.include_router(reviews.router, prefix="/api", tags=["Reviews"])
 
     # Business settings routes
     app.include_router(business.router, tags=["Business"])

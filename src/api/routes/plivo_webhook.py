@@ -179,7 +179,7 @@ async def plivo_hangup_webhook(
             # Finalize pipeline and get metrics
             metrics = await pipeline.finalize()
 
-            # Log to database
+            # Log to database with latency metrics
             async with get_session_context() as db_session:
                 repo = AsyncCallLogRepository(db_session)
                 await repo.upsert_call_log(
@@ -189,10 +189,37 @@ async def plivo_hangup_webhook(
                     duration_seconds=int(duration),
                     transcript=metrics.get("transcript"),
                     detected_language=session.detected_language,
+                    # Performance metrics (prefer session metrics, fallback to pipeline)
+                    stt_latency_p50_ms=(
+                        metrics.get("p50_first_word_ms") or metrics.get("p50_stt_latency_ms")
+                    ),
+                    llm_latency_p50_ms=(
+                        metrics.get("p50_first_token_ms") or metrics.get("p50_llm_first_token_ms")
+                    ),
+                    tts_latency_p50_ms=metrics.get("p50_tts_first_chunk_ms"),
+                    barge_in_count=metrics.get("barge_in_count", 0),
+                    total_turns=metrics.get("total_turns", 0),
                 )
                 await db_session.commit()
 
             logger.info(f"Persisted final metrics for {call_uuid}")
+
+            # Queue summary generation and transcript analysis if transcript exists
+            if metrics.get("transcript"):
+                try:
+                    from arq import create_pool
+
+                    pool = await create_pool(settings.redis_settings)
+                    await pool.enqueue_job("generate_call_summary", call_uuid)
+                    logger.debug(f"Queued summary generation for {call_uuid}")
+
+                    # Queue transcript analysis for QA (runs after summary)
+                    await pool.enqueue_job("analyze_transcript_quality", call_uuid)
+                    logger.debug(f"Queued transcript analysis for {call_uuid}")
+
+                    await pool.close()
+                except Exception as e:
+                    logger.warning(f"Failed to queue background jobs: {e}")
 
         except Exception as e:
             logger.error(f"Error persisting call metrics: {e}")

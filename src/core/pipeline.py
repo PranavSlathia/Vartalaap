@@ -118,10 +118,27 @@ class PipelineMetrics:
             "avg_stt_latency_ms": self._avg(self.stt_latencies_ms),
             "avg_llm_first_token_ms": self._avg(self.llm_first_token_ms),
             "avg_tts_first_chunk_ms": self._avg(self.tts_first_chunk_ms),
+            "p50_stt_latency_ms": self._percentile(self.stt_latencies_ms, 50),
+            "p50_llm_first_token_ms": self._percentile(self.llm_first_token_ms, 50),
+            "p50_tts_first_chunk_ms": self._percentile(self.tts_first_chunk_ms, 50),
         }
 
     def _avg(self, values: list[float]) -> float:
         return sum(values) / len(values) if values else 0.0
+
+    def _percentile(self, values: list[float], p: int) -> float:
+        """Calculate percentile using nearest-rank with linear interpolation."""
+        if not values:
+            return 0.0
+        sorted_values = sorted(values)
+        n = len(sorted_values)
+        # Use (n-1) * p / 100 for proper zero-based indexing
+        idx = (n - 1) * p / 100
+        lower = int(idx)
+        upper = min(lower + 1, n - 1)
+        # Linear interpolation between adjacent values
+        weight = idx - lower
+        return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
 
 
 class AudioBuffer:

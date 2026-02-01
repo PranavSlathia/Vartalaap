@@ -2,6 +2,7 @@
 
 Note: fastapi-crudrouter's SQLAlchemyCRUDRouter is sync-oriented and
 incompatible with async sessions. This module provides async CRUD operations.
+Security: All endpoints require JWT authentication and tenant authorization.
 """
 
 from datetime import UTC, date, datetime
@@ -12,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.auth import RequireBusinessAccess
 from src.db.models import Reservation, ReservationStatus
 from src.db.session import get_session
 
@@ -76,6 +78,7 @@ class ReservationResponse(BaseModel):
 
 @router.get("", response_model=list[ReservationResponse])
 async def list_reservations(
+    auth_business_id: RequireBusinessAccess,
     session: AsyncSession = Depends(get_session),
     business_id: str = Query(..., description="Required for tenant isolation"),
     status: ReservationStatus | None = Query(None),
@@ -86,8 +89,15 @@ async def list_reservations(
 ) -> list[ReservationResponse]:
     """List reservations with optional filters.
 
-    Security: business_id is required to prevent cross-tenant data access.
+    Security: Requires JWT authentication. business_id must match authorized tenant.
     """
+    # Verify tenant access matches requested business
+    if business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to access business '{business_id}'",
+        )
+
     query = select(Reservation)
 
     # Required: always scope by business_id
@@ -127,9 +137,13 @@ async def list_reservations(
 @router.get("/{reservation_id}", response_model=ReservationResponse)
 async def get_reservation(
     reservation_id: str,
+    auth_business_id: RequireBusinessAccess,
     session: AsyncSession = Depends(get_session),
 ) -> ReservationResponse:
-    """Get a reservation by ID."""
+    """Get a reservation by ID.
+
+    Security: Requires JWT authentication. Reservation must belong to authorized tenant.
+    """
     result = await session.execute(
         select(Reservation).where(Reservation.id == reservation_id)  # type: ignore[arg-type]
     )
@@ -137,6 +151,13 @@ async def get_reservation(
 
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
+
+    # Verify tenant access
+    if reservation.business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to access this reservation",
+        )
 
     return ReservationResponse(
         id=reservation.id,
@@ -158,9 +179,20 @@ async def get_reservation(
 @router.post("", response_model=ReservationResponse, status_code=201)
 async def create_reservation(
     data: ReservationCreate,
+    auth_business_id: RequireBusinessAccess,
     session: AsyncSession = Depends(get_session),
 ) -> ReservationResponse:
-    """Create a new reservation."""
+    """Create a new reservation.
+
+    Security: Requires JWT authentication. Can only create reservations for authorized tenant.
+    """
+    # Verify tenant access matches requested business
+    if data.business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to create reservations for business '{data.business_id}'",
+        )
+
     now = datetime.now(UTC)
     reservation = Reservation(
         id=str(uuid4()),
@@ -204,9 +236,13 @@ async def create_reservation(
 async def update_reservation(
     reservation_id: str,
     data: ReservationUpdate,
+    auth_business_id: RequireBusinessAccess,
     session: AsyncSession = Depends(get_session),
 ) -> ReservationResponse:
-    """Update a reservation (partial update)."""
+    """Update a reservation (partial update).
+
+    Security: Requires JWT authentication. Reservation must belong to authorized tenant.
+    """
     result = await session.execute(
         select(Reservation).where(Reservation.id == reservation_id)  # type: ignore[arg-type]
     )
@@ -214,6 +250,13 @@ async def update_reservation(
 
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
+
+    # Verify tenant access
+    if reservation.business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to update this reservation",
+        )
 
     # Apply updates only for provided fields
     update_data = data.model_dump(exclude_unset=True)
@@ -246,9 +289,13 @@ async def update_reservation(
 @router.delete("/{reservation_id}", status_code=204)
 async def delete_reservation(
     reservation_id: str,
+    auth_business_id: RequireBusinessAccess,
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    """Delete a reservation."""
+    """Delete a reservation.
+
+    Security: Requires JWT authentication. Reservation must belong to authorized tenant.
+    """
     result = await session.execute(
         select(Reservation).where(Reservation.id == reservation_id)  # type: ignore[arg-type]
     )
@@ -256,5 +303,12 @@ async def delete_reservation(
 
     if not reservation:
         raise HTTPException(status_code=404, detail="Reservation not found")
+
+    # Verify tenant access
+    if reservation.business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to delete this reservation",
+        )
 
     await session.delete(reservation)

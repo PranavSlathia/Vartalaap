@@ -42,7 +42,9 @@ Codegen: datamodel-codegen + fastapi-crudrouter + alembic
 | **TTS** | Piper (primary, self-hosted) / Edge TTS (fallback, feature-flagged) |
 | **Telephony** | Plivo (WebSocket audio streams) |
 | **Background Tasks** | arq + Redis |
+| **QA Agents** | CrewAI + langchain-groq (transcript analysis) |
 | **Admin UI** | Streamlit on subdomain |
+| **Web Frontend** | React 19 + TypeScript + Vite 7 + TanStack Query |
 
 ---
 
@@ -67,6 +69,7 @@ Use these slash commands for context-rich assistance:
 | **Admin** | `/admin` | Streamlit pages, authentication, PII masking |
 | **Voice** | `/voice` | Voice pipeline (STT → LLM → TTS), latency optimization |
 | **API** | `/api` | CRUD endpoints, fastapi-crudrouter, OpenAPI |
+| **Frontend** | `/frontend` | React, TypeScript, Orval codegen, OIDC auth |
 
 ---
 
@@ -107,6 +110,10 @@ vartalaap/
 │   ├── api/routes/         # FastAPI routes
 │   ├── core/pipeline.py    # Voice pipeline orchestrator
 │   └── services/           # STT, LLM, TTS, Telephony
+├── web/                    # React frontend (Vite + TypeScript)
+│   ├── src/api/            # Generated API client (DO NOT EDIT)
+│   ├── src/components/     # React components
+│   └── orval.config.ts     # OpenAPI → TypeScript codegen
 ├── admin/                  # Streamlit admin UI
 ├── migrations/             # Alembic migrations
 └── config/                 # Business configs (YAML)
@@ -161,9 +168,12 @@ vartalaap/
 uv run uvicorn src.main:app --reload          # API server
 uv run streamlit run admin/app.py             # Admin UI
 uv run arq src.worker.WorkerSettings          # Background worker
+cd web && npm run dev                         # React frontend
 
 # Code Generation
-./scripts/generate.sh                         # Generate all (schemas, check migrations, ER diagram)
+./scripts/generate.sh                         # Generate Python schemas
+./scripts/generate-fullstack.sh               # Full-stack codegen (Python + TypeScript)
+cd web && npm run generate:api                # Generate TypeScript from OpenAPI
 make migration msg="description"              # Create new migration
 uv run alembic upgrade head                   # Apply migrations
 
@@ -171,6 +181,7 @@ uv run alembic upgrade head                   # Apply migrations
 uv run ward                                   # Run tests
 uv run ruff check .                           # Lint
 uv run mypy src/                              # Type check
+cd web && npm run typecheck                   # TypeScript check
 ```
 
 ---

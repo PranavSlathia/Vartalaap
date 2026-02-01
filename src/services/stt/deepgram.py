@@ -174,7 +174,7 @@ class DeepgramService:
             smart_format=True,  # Punctuation, numbers, dates
             punctuate=True,
             interim_results=True,  # Real-time feedback
-            utterance_end_ms=1000,  # 1s silence = utterance end
+            utterance_end_ms=600,  # 600ms silence = utterance end (matches natural speech pause)
             vad_events=True,  # Voice activity detection
             encoding=encoding,
             sample_rate=sample_rate,

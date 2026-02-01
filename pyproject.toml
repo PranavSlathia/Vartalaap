@@ -35,6 +35,7 @@ dependencies = [
     # Security
     "cryptography>=44.0.0,<45",
     "bcrypt>=4.2.0,<5",
+    "PyJWT[crypto]>=2.8.0,<3",
     # HTTP
     "aiohttp>=3.11.0,<4",
     # Logging
@@ -49,6 +50,10 @@ dependencies = [
     "sounddevice>=0.5.5",
     "gtts>=2.5.4",
     "elevenlabs>=2.33.1",
+    # Agent System (Transcript Analysis)
+    "crewai>=0.86.0,<1",
+    "crewai-tools>=0.17.0,<1",
+    "langchain-groq>=0.2.0,<1",
 ]
 
 [project.optional-dependencies]
@@ -114,4 +119,5 @@ dev = [
     "ruff>=0.14.14",
     "types-pyyaml>=6.0.12.20250915",
     "httpx>=0.27.0",
+    "datamodel-code-generator>=0.26.5",
 ]

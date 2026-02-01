@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Release](https://img.shields.io/badge/release-v0.2-brightgreen.svg)](https://github.com/PranavSlathia/Vartalaap/releases)
+[![Release](https://img.shields.io/badge/release-v0.3-brightgreen.svg)](https://github.com/PranavSlathia/Vartalaap/releases)
 
 A production-ready voice bot that handles phone calls autonomously with native **Hindi-English-Hinglish** support. Built for restaurants, clinics, and local businesses that need affordable, high-quality voice AI.
 
@@ -17,11 +17,27 @@ A production-ready voice bot that handles phone calls autonomously with native *
 - **🍽️ Restaurant Demo**: Table reservations, menu queries, hours - fully functional
 - **🧠 Knowledge Base (RAG)**: ChromaDB-powered retrieval for menu items, FAQs, policies
 - **🏢 Multi-Business**: Support multiple businesses with phone-based routing
+- **🤖 AI-Powered QA**: CrewAI agents analyze transcripts for quality issues and improvements
 - **🎯 Low Latency**: P50 < 500ms processing, per-step timeouts, optimized for real conversations
 - **🔒 Privacy First**: Phone encryption (AES-256-GCM), PII masking, safe routing
 - **💰 Cost Effective**: ~$16-27/month operational cost
 
-## 🆕 What's New in v0.2
+## 🆕 What's New in v0.3
+
+- **CrewAI Transcript Analysis**: Multi-agent QA system reviews call transcripts automatically
+  - QA Reviewer agent identifies issues and rates call quality (1-5)
+  - Issue Classifier categorizes problems (knowledge gap, STT error, UX issue, etc.)
+  - Improvement Suggester generates actionable fixes with priorities
+- **React Admin Frontend**: Modern TypeScript frontend with Orval-generated API client
+- **Transcript Reviews API**: View quality scores, issues, and suggestions per call
+- **Latency Metrics**: Accurate percentile calculations with linear interpolation
+- **Concurrency Safety**: Unique constraints prevent duplicate reviews under load
+- **ChromaDB Reliability**: Proper commit ordering prevents orphaned embeddings
+
+## 📋 Previous Releases
+
+<details>
+<summary>v0.2 - Multi-Business & Knowledge Base</summary>
 
 - **Multi-Business Support**: Route calls to different businesses based on phone number
 - **Knowledge Base System**: RAG-powered retrieval with ChromaDB for dynamic menu/FAQ responses
@@ -29,6 +45,7 @@ A production-ready voice bot that handles phone calls autonomously with native *
 - **Security Hardening**: Safe phone routing fallback, capacity limits, per-step timeouts
 - **Data Integrity**: Transactional consistency between DB and vector store
 - **Prometheus Metrics**: RAG latency and hit rate observability
+</details>
 
 ## 🏗️ Architecture
 
@@ -45,10 +62,10 @@ A production-ready voice bot that handles phone calls autonomously with native *
 └─────────────┘     └──────┬───────┘     └─────────────┘
                           │
                           ▼
-┌─────────────┐     ┌──────────────┐
-│   Plivo     │◀───▶│  Piper TTS   │
-│ (Telephony) │     │   (Hindi)    │
-└─────────────┘     └──────────────┘
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Plivo     │◀───▶│  Piper TTS   │     │   CrewAI    │
+│ (Telephony) │     │   (Hindi)    │     │  (QA Agents)│
+└─────────────┘     └──────────────┘     └─────────────┘
 ```
 
 ## 🚀 Quick Start
@@ -123,7 +140,7 @@ Open in browser: **http://localhost:8000/voice**
 vartalaap/
 ├── src/
 │   ├── api/                 # FastAPI routes & WebSocket handlers
-│   │   ├── routes/          # REST endpoints (Plivo webhooks, CRUD)
+│   │   ├── routes/          # REST endpoints (Plivo webhooks, CRUD, reviews)
 │   │   ├── websocket/       # Audio streaming with capacity limits
 │   │   └── static/          # Voice test UI
 │   ├── core/                # Business logic
@@ -135,9 +152,12 @@ vartalaap/
 │   │   ├── llm/             # Language model (Groq) with RAG injection
 │   │   ├── tts/             # Text-to-speech (Piper)
 │   │   ├── telephony/       # Phone (Plivo)
-│   │   └── knowledge/       # RAG retrieval (ChromaDB + embeddings)
+│   │   ├── knowledge/       # RAG retrieval (ChromaDB + embeddings)
+│   │   └── analysis/        # CrewAI transcript QA agents
 │   ├── db/                  # Database models & repositories
 │   └── observability/       # Prometheus metrics
+├── web/                     # React admin frontend (TypeScript + Vite)
+│   └── src/api/             # Orval-generated API client
 ├── admin/                   # Streamlit admin dashboard
 │   └── pages/               # Menu editor, FAQ editor, knowledge test
 ├── config/                  # Business configuration (YAML)
@@ -308,6 +328,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 - [Groq](https://groq.com) - Fast LLM inference
 - [Piper](https://github.com/rhasspy/piper) - Offline Hindi TTS
 - [ChromaDB](https://trychroma.com) - Vector database for RAG
+- [CrewAI](https://crewai.com) - Multi-agent orchestration for QA
 - [FastAPI](https://fastapi.tiangolo.com) - Web framework
 - [Streamlit](https://streamlit.io) - Admin dashboard
 

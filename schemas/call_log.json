@@ -54,6 +54,56 @@
     "created_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "stt_latency_p50_ms": {
+      "type": "number",
+      "description": "P50 STT latency in milliseconds"
+    },
+    "llm_latency_p50_ms": {
+      "type": "number",
+      "description": "P50 LLM first token latency in milliseconds"
+    },
+    "tts_latency_p50_ms": {
+      "type": "number",
+      "description": "P50 TTS first chunk latency in milliseconds"
+    },
+    "barge_in_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Number of barge-ins during call"
+    },
+    "total_turns": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Total conversation turns"
+    },
+    "call_rating": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "Caller satisfaction rating (1-5 stars)"
+    },
+    "caller_feedback": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Optional caller feedback text"
+    },
+    "rating_method": {
+      "type": "string",
+      "enum": ["dtmf", "admin", "auto"],
+      "description": "How rating was collected"
+    },
+    "call_summary": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "LLM-generated call summary"
+    },
+    "call_category": {
+      "type": "string",
+      "enum": ["booking", "inquiry", "complaint", "spam", "other"],
+      "description": "Call intent category"
     }
   }
 }

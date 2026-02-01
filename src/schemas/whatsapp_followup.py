@@ -20,5 +20,5 @@ class WhatsAppFollowup(BaseModel):
     reservation_id: str
     customer_phone_encrypted: str
     message: str | None = None
-    status: Status | None = 'pending'  # type: ignore[assignment]
+    status: Status | None = 'pending'
     created_at: datetime | None = None

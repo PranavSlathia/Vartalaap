@@ -5,48 +5,23 @@ Only admins can access business settings for their authorized businesses.
 """
 
 import re
-from typing import Annotated
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import delete, select
 
+from src.api.auth import RequireBusinessAccess
 from src.db.models import Business, BusinessPhoneNumber, BusinessStatus, BusinessType
 from src.db.session import get_session
 
 router = APIRouter(prefix="/api/business", tags=["business"])
 
-# Valid time format HH:MM
+# Valid time format HH:MM (supports single-digit hours like 9:00)
 TIME_PATTERN = re.compile(r"^([01]?[0-9]|2[0-3]):[0-5][0-9]$")
 VALID_DAYS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
-
-
-# =============================================================================
-# Authentication Dependency
-# =============================================================================
-
-
-async def get_current_business_id(
-    x_business_id: Annotated[str | None, Header()] = None,
-    authorization: Annotated[str | None, Header()] = None,
-) -> str:
-    """Extract and validate business_id from request.
-
-    In production, this should validate the JWT token and extract
-    the authorized business_id from claims. For MVP, we use a header.
-
-    TODO: Integrate with Keycloak JWT validation to extract business_id
-    from token claims (e.g., resource_access or custom claim).
-    """
-    if not x_business_id:
-        raise HTTPException(
-            status_code=401,
-            detail="X-Business-ID header required. Set VITE_BUSINESS_ID in frontend.",
-        )
-    # TODO: Validate that the authenticated user has access to this business
-    # by checking JWT claims against x_business_id
-    return x_business_id
 
 
 # =============================================================================
@@ -54,23 +29,51 @@ async def get_current_business_id(
 # =============================================================================
 
 
+def time_to_minutes(time_str: str) -> int:
+    """Convert HH:MM time string to minutes since midnight.
+
+    Handles single-digit hours (e.g., "9:00" → 540, "10:00" → 600).
+    This avoids string comparison bugs like "10:00" < "9:00".
+    """
+    hours, minutes = time_str.split(":")
+    return int(hours) * 60 + int(minutes)
+
+
 class OperatingHours(BaseModel):
     """Operating hours for a single day."""
 
     open: str | None = Field(None, description="Opening time (HH:MM) or null if closed")
     close: str | None = Field(None, description="Closing time (HH:MM) or null if closed")
+    overnight: bool = Field(
+        False,
+        description="True if close time is the next day (e.g., 22:00-02:00)",
+    )
 
     @model_validator(mode="after")
     def validate_times(self) -> "OperatingHours":
-        """Validate time format."""
+        """Validate time format and order."""
         if self.open is not None and not TIME_PATTERN.match(self.open):
             raise ValueError(f"Invalid opening time format: {self.open}. Use HH:MM.")
         if self.close is not None and not TIME_PATTERN.match(self.close):
             raise ValueError(f"Invalid closing time format: {self.close}. Use HH:MM.")
+
         if self.open and self.close:
-            # Basic sanity: close should be after open (doesn't handle overnight)
-            if self.close <= self.open:
-                raise ValueError("Closing time must be after opening time")
+            # Convert to minutes for proper numeric comparison
+            open_mins = time_to_minutes(self.open)
+            close_mins = time_to_minutes(self.close)
+
+            if self.overnight:
+                # Overnight hours: close can be <= open (e.g., 22:00-02:00)
+                # But must make sense (not 02:00-02:00)
+                if open_mins == close_mins:
+                    raise ValueError("Open and close times cannot be identical")
+            else:
+                # Same-day hours: close must be after open
+                if close_mins <= open_mins:
+                    raise ValueError(
+                        f"Closing time ({self.close}) must be after opening ({self.open}). "
+                        "For overnight hours (e.g., 22:00-02:00), set overnight: true"
+                    )
         return self
 
 
@@ -98,6 +101,13 @@ class ReservationRules(BaseModel):
             raise ValueError(
                 f"max_phone_party_size ({self.max_phone_party_size}) cannot exceed "
                 f"max_party_size ({self.max_party_size})"
+            )
+        # Ensure phone booking is possible (min_party_size must be achievable by phone)
+        if self.min_party_size > self.max_phone_party_size:
+            raise ValueError(
+                f"min_party_size ({self.min_party_size}) cannot exceed "
+                f"max_phone_party_size ({self.max_phone_party_size}). "
+                "This would make phone booking impossible."
             )
         if self.max_party_size > self.total_seats:
             raise ValueError(
@@ -155,6 +165,19 @@ class BusinessUpdate(BaseModel):
             for phone in self.phone_numbers:
                 if not phone.startswith("+") or not phone[1:].isdigit():
                     raise ValueError(f"Invalid E.164 phone number: {phone}")
+        return self
+
+    @model_validator(mode="after")
+    def validate_timezone(self) -> "BusinessUpdate":
+        """Validate timezone is a valid IANA name."""
+        if self.timezone:
+            try:
+                ZoneInfo(self.timezone)
+            except ZoneInfoNotFoundError as e:
+                raise ValueError(
+                    f"Invalid timezone: '{self.timezone}'. "
+                    "Use IANA timezone names like 'Asia/Kolkata' or 'America/New_York'."
+                ) from e
         return self
 
 
@@ -236,12 +259,13 @@ async def sync_phone_numbers(
 @router.get("/{business_id}", response_model=BusinessResponse)
 async def get_business(
     business_id: str,
+    auth_business_id: RequireBusinessAccess,
     session: AsyncSession = Depends(get_session),
-    auth_business_id: str = Depends(get_current_business_id),
 ) -> BusinessResponse:
     """Get business settings by ID.
 
-    Requires X-Business-ID header matching the requested business_id.
+    Requires JWT authentication and X-Business-ID header.
+    User must have access to the requested business.
     """
     # Tenant isolation: only allow access to authorized business
     if business_id != auth_business_id:
@@ -263,12 +287,13 @@ async def get_business(
 async def update_business(
     business_id: str,
     update: BusinessUpdate,
+    auth_business_id: RequireBusinessAccess,
     session: AsyncSession = Depends(get_session),
-    auth_business_id: str = Depends(get_current_business_id),
 ) -> BusinessResponse:
     """Update business settings.
 
-    Requires X-Business-ID header matching the requested business_id.
+    Requires JWT authentication and X-Business-ID header.
+    User must have access to the requested business.
     """
     # Tenant isolation: only allow access to authorized business
     if business_id != auth_business_id:
@@ -309,6 +334,9 @@ async def update_business(
         business.greeting_text = update.greeting_text
     if update.menu_summary is not None:
         business.menu_summary = update.menu_summary
+
+    # Always update timestamp on modification
+    business.updated_at = datetime.now(UTC)
 
     session.add(business)
     await session.commit()

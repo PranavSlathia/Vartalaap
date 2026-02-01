@@ -26,7 +26,7 @@ class AudioResampler:
         self,
         source_rate: int,
         target_rate: int,
-        quality: str = "HQ",  # VHQ, HQ, MQ, LQ, QQ
+        quality: str = "MQ",  # VHQ, HQ, MQ, LQ, QQ (MQ is perceptually equivalent for voice)
     ) -> None:
         self._source_rate = source_rate
         self._target_rate = target_rate
