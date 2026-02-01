@@ -29,6 +29,11 @@ if TYPE_CHECKING:
 
 logger: Any = get_logger(__name__)
 
+# Per-step timeout budgets (seconds)
+STT_TIMEOUT = 10.0  # Max time for speech recognition per utterance
+LLM_TIMEOUT = 15.0  # Max time for LLM response generation
+TTS_TIMEOUT = 10.0  # Max time for TTS synthesis
+
 
 class PipelineState(Enum):
     """State machine for voice pipeline."""
@@ -391,11 +396,22 @@ class VoicePipeline:
 
         await self._set_state(PipelineState.PROCESSING)
 
-        # Get LLM response
+        # Get LLM response with timeout
         response_parts: list[str] = []
         try:
-            async for chunk in self._session.stream_response(transcript):
-                response_parts.append(chunk)
+            async def collect_response() -> list[str]:
+                parts: list[str] = []
+                async for chunk in self._session.stream_response(transcript):
+                    parts.append(chunk)
+                return parts
+
+            response_parts = await asyncio.wait_for(
+                collect_response(),
+                timeout=LLM_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"LLM timeout exceeded ({LLM_TIMEOUT}s)")
+            response_parts = ["Maaf kijiye, thoda time lag raha hai. Kripya dobara bolein."]
         except Exception as e:
             logger.error(f"LLM error: {e}")
             response_parts = ["Sorry, I'm having trouble. Please try again."]
@@ -416,9 +432,13 @@ class VoicePipeline:
         await self._set_state(PipelineState.SPEAKING)
 
         try:
-            generator, metadata = await self._tts.synthesize_stream(
-                text,
-                target_sample_rate=self._config.output_sample_rate,
+            # TTS synthesis with timeout
+            generator, metadata = await asyncio.wait_for(
+                self._tts.synthesize_stream(
+                    text,
+                    target_sample_rate=self._config.output_sample_rate,
+                ),
+                timeout=TTS_TIMEOUT,
             )
 
             if metadata.first_chunk_ms:
@@ -438,6 +458,9 @@ class VoicePipeline:
 
                 # Small yield to allow barge-in detection
                 await asyncio.sleep(0.001)
+
+        except asyncio.TimeoutError:
+            logger.error(f"TTS timeout exceeded ({TTS_TIMEOUT}s) for text: {text[:50]}...")
 
         except Exception as e:
             logger.error(f"TTS error: {e}")

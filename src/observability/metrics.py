@@ -30,6 +30,12 @@ BARGE_IN_TOTAL = Counter(
     ["business_id"],
 )
 
+RAG_HIT_RATE = Counter(
+    "vartalaap_rag_hits_total",
+    "RAG retrieval hit rate by score quality",
+    ["score_bucket", "business_id"],
+)
+
 # =============================================================================
 # Gauges
 # =============================================================================
@@ -66,6 +72,12 @@ TTS_FIRST_CHUNK = Histogram(
     "vartalaap_tts_first_chunk_seconds",
     "TTS time to first audio chunk",
     buckets=[0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0],
+)
+
+RAG_RETRIEVAL_LATENCY = Histogram(
+    "vartalaap_rag_retrieval_seconds",
+    "Knowledge retrieval latency",
+    buckets=[0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5],
 )
 
 # =============================================================================
@@ -113,6 +125,38 @@ def record_call_metrics(
     # Record barge-ins
     if barge_in_count > 0:
         BARGE_IN_TOTAL.labels(business_id=business_id).inc(barge_in_count)
+
+
+def record_rag_metrics(
+    business_id: str,
+    retrieval_time_ms: float,
+    top_score: float | None,
+    result_count: int,
+) -> None:
+    """Record metrics for a knowledge retrieval operation.
+
+    Args:
+        business_id: Business identifier
+        retrieval_time_ms: Retrieval latency in milliseconds
+        top_score: Highest similarity score from results (None if no results)
+        result_count: Number of results returned
+    """
+    # Record latency (convert from ms to seconds)
+    RAG_RETRIEVAL_LATENCY.observe(retrieval_time_ms / 1000)
+
+    # Record hit quality by score bucket
+    if result_count > 0 and top_score is not None:
+        if top_score >= 0.7:
+            bucket = "high"  # Strong match
+        elif top_score >= 0.5:
+            bucket = "medium"  # Good match
+        elif top_score >= 0.3:
+            bucket = "low"  # Weak match
+        else:
+            bucket = "miss"  # Below threshold
+        RAG_HIT_RATE.labels(score_bucket=bucket, business_id=business_id).inc()
+    else:
+        RAG_HIT_RATE.labels(score_bucket="miss", business_id=business_id).inc()
 
 
 def get_metrics() -> bytes:

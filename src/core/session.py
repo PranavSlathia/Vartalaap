@@ -41,6 +41,7 @@ class CallSession:
     call_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     business_id: str = "himalayan_kitchen"
     caller_id_hash: str | None = None
+    greeting_text: str | None = None  # Custom greeting from Business config
     call_start: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Services (initialized in __post_init__)

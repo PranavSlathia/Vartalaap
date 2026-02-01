@@ -27,6 +27,15 @@ from src.services.telephony.plivo import mulaw_to_pcm16, pcm16_to_mulaw
 
 logger: Any = get_logger(__name__)
 
+# System capacity limit to prevent overload
+MAX_CONCURRENT_CALLS = 10  # Adjust based on server resources (CPU, memory)
+
+
+class CallCapacityError(Exception):
+    """Raised when system is at maximum call capacity."""
+
+    pass
+
 
 @dataclass
 class CallSessionEntry:
@@ -56,21 +65,36 @@ class CallSessionRegistry:
         *,
         business_id: str = "himalayan_kitchen",
         caller_id_hash: str | None = None,
+        greeting_text: str | None = None,
         settings: Settings | None = None,
     ) -> tuple[CallSession, VoicePipeline]:
         """Create a new call session.
 
         Called when call is answered (from webhook).
+
+        Raises:
+            CallCapacityError: If system is at maximum capacity.
         """
         async with self._lock:
             if call_id in self._sessions:
                 entry = self._sessions[call_id]
                 return entry.session, entry.pipeline
 
+            # Check capacity before creating new session
+            if len(self._sessions) >= MAX_CONCURRENT_CALLS:
+                logger.warning(
+                    f"Max concurrent calls reached ({MAX_CONCURRENT_CALLS}), "
+                    f"rejecting call {call_id}"
+                )
+                raise CallCapacityError(
+                    f"System at capacity ({MAX_CONCURRENT_CALLS} concurrent calls)"
+                )
+
             session = CallSession(
                 call_id=call_id,
                 business_id=business_id,
                 caller_id_hash=caller_id_hash,
+                greeting_text=greeting_text,
             )
             pipeline = VoicePipeline(session, settings=settings)
 
@@ -79,7 +103,10 @@ class CallSessionRegistry:
                 pipeline=pipeline,
             )
 
-            logger.info(f"Created session for call {call_id}")
+            logger.info(
+                f"Created session for call {call_id} (business: {business_id}, "
+                f"active: {len(self._sessions)}/{MAX_CONCURRENT_CALLS})"
+            )
             return session, pipeline
 
     async def get(self, call_id: str) -> tuple[CallSession, VoicePipeline] | None:

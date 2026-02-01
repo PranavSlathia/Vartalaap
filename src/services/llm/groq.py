@@ -35,6 +35,9 @@ logger: Any = get_logger(__name__)
 GROQ_FREE_TIER_TPM = 6000  # Tokens per minute
 GROQ_FREE_TIER_RPM = 30  # Requests per minute
 
+# RAG injection limits - prevent prompt explosion
+MAX_KNOWLEDGE_TOKENS = 500  # ~375 words, fits within P50 latency budget
+
 
 class GroqService:
     """Groq LLM service with async streaming and rate limiting."""
@@ -286,6 +289,49 @@ class GroqService:
 
         if context.caller_history:
             prompt += f"\n## Caller History\n{context.caller_history}\n"
+
+        # Inject retrieved knowledge from RAG with token budget
+        if context.retrieved_knowledge and context.retrieved_knowledge.has_results:
+            knowledge_section = context.retrieved_knowledge.to_prompt_section()
+            knowledge_tokens = self.estimate_tokens(knowledge_section)
+
+            if knowledge_tokens > MAX_KNOWLEDGE_TOKENS:
+                # Truncate by reducing items until within budget
+                logger.warning(
+                    f"Knowledge section exceeds budget: {knowledge_tokens} > {MAX_KNOWLEDGE_TOKENS} tokens"
+                )
+                # Take fewer items - rebuild with reduced set
+                items = context.retrieved_knowledge.items
+                truncated_items = []
+                running_tokens = 50  # Reserve for section headers
+
+                for item in items:
+                    item_text = item.to_prompt_text()
+                    item_tokens = self.estimate_tokens(item_text)
+                    if running_tokens + item_tokens <= MAX_KNOWLEDGE_TOKENS:
+                        truncated_items.append(item)
+                        running_tokens += item_tokens
+                    else:
+                        break
+
+                if truncated_items:
+                    # Rebuild section with truncated items
+                    from src.services.knowledge.protocol import KnowledgeResult
+
+                    truncated_result = KnowledgeResult(
+                        query=context.retrieved_knowledge.query,
+                        items=truncated_items,
+                        retrieval_time_ms=context.retrieved_knowledge.retrieval_time_ms,
+                    )
+                    knowledge_section = truncated_result.to_prompt_section()
+                    logger.info(
+                        f"Truncated knowledge from {len(items)} to {len(truncated_items)} items"
+                    )
+                else:
+                    knowledge_section = ""  # Skip if even first item exceeds budget
+
+            if knowledge_section:
+                prompt += f"\n{knowledge_section}\n"
 
         # Use custom prompt template if available, otherwise default guidelines
         if context.prompt_template:

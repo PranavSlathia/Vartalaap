@@ -5,18 +5,30 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Release](https://img.shields.io/badge/release-v0.2-brightgreen.svg)](https://github.com/PranavSlathia/Vartalaap/releases)
 
 A production-ready voice bot that handles phone calls autonomously with native **Hindi-English-Hinglish** support. Built for restaurants, clinics, and local businesses that need affordable, high-quality voice AI.
 
 ## ✨ Features
 
-- **🎙️ Real-time Voice Pipeline**: Deepgram STT → Groq LLM → gTTS/Piper TTS
+- **🎙️ Real-time Voice Pipeline**: Deepgram STT → Groq LLM → Piper TTS (< 500ms P50)
 - **🇮🇳 Native Hindi Support**: Seamless code-switching between Hindi, English, and Hinglish
 - **📞 Telephony Ready**: Plivo integration for inbound calls (WebSocket audio streaming)
 - **🍽️ Restaurant Demo**: Table reservations, menu queries, hours - fully functional
-- **🎯 Low Latency**: P50 < 500ms processing, optimized for real conversations
-- **🔒 Privacy First**: Phone encryption, PII masking, GDPR-friendly
+- **🧠 Knowledge Base (RAG)**: ChromaDB-powered retrieval for menu items, FAQs, policies
+- **🏢 Multi-Business**: Support multiple businesses with phone-based routing
+- **🎯 Low Latency**: P50 < 500ms processing, per-step timeouts, optimized for real conversations
+- **🔒 Privacy First**: Phone encryption (AES-256-GCM), PII masking, safe routing
 - **💰 Cost Effective**: ~$16-27/month operational cost
+
+## 🆕 What's New in v0.2
+
+- **Multi-Business Support**: Route calls to different businesses based on phone number
+- **Knowledge Base System**: RAG-powered retrieval with ChromaDB for dynamic menu/FAQ responses
+- **Admin UI Editors**: Menu editor, FAQ editor, and knowledge test pages
+- **Security Hardening**: Safe phone routing fallback, capacity limits, per-step timeouts
+- **Data Integrity**: Transactional consistency between DB and vector store
+- **Prometheus Metrics**: RAG latency and hit rate observability
 
 ## 🏗️ Architecture
 
@@ -27,15 +39,15 @@ A production-ready voice bot that handles phone calls autonomously with native *
 └─────────────┘     └──────┬───────┘     └─────────────┘
                           │
                           ▼
-                   ┌──────────────┐
-                   │   Groq LLM   │
-                   │ (llama-3.3)  │
-                   └──────┬───────┘
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│  ChromaDB   │────▶│   Groq LLM   │◀────│   SQLite    │
+│    (RAG)    │     │ (llama-3.3)  │     │  (Business) │
+└─────────────┘     └──────┬───────┘     └─────────────┘
                           │
                           ▼
 ┌─────────────┐     ┌──────────────┐
-│   Plivo     │◀───▶│  TTS Engine  │
-│ (Telephony) │     │ (gTTS/Piper) │
+│   Plivo     │◀───▶│  Piper TTS   │
+│ (Telephony) │     │   (Hindi)    │
 └─────────────┘     └──────────────┘
 ```
 
@@ -111,21 +123,26 @@ Open in browser: **http://localhost:8000/voice**
 vartalaap/
 ├── src/
 │   ├── api/                 # FastAPI routes & WebSocket handlers
-│   │   ├── routes/          # REST endpoints
-│   │   ├── websocket/       # Audio streaming
+│   │   ├── routes/          # REST endpoints (Plivo webhooks, CRUD)
+│   │   ├── websocket/       # Audio streaming with capacity limits
 │   │   └── static/          # Voice test UI
 │   ├── core/                # Business logic
-│   │   ├── pipeline.py      # Voice pipeline orchestrator
+│   │   ├── pipeline.py      # Voice pipeline with per-step timeouts
 │   │   ├── session.py       # Call session management
-│   │   └── conversation_state.py
+│   │   └── context.py       # Business context builder
 │   ├── services/            # External service integrations
 │   │   ├── stt/             # Speech-to-text (Deepgram)
-│   │   ├── llm/             # Language model (Groq)
-│   │   ├── tts/             # Text-to-speech (gTTS/Piper)
-│   │   └── telephony/       # Phone (Plivo)
-│   └── db/                  # Database models & repositories
+│   │   ├── llm/             # Language model (Groq) with RAG injection
+│   │   ├── tts/             # Text-to-speech (Piper)
+│   │   ├── telephony/       # Phone (Plivo)
+│   │   └── knowledge/       # RAG retrieval (ChromaDB + embeddings)
+│   ├── db/                  # Database models & repositories
+│   └── observability/       # Prometheus metrics
 ├── admin/                   # Streamlit admin dashboard
+│   └── pages/               # Menu editor, FAQ editor, knowledge test
 ├── config/                  # Business configuration (YAML)
+├── migrations/              # Alembic database migrations
+├── schemas/                 # JSON Schema (source of truth)
 ├── tests/                   # Test suite
 └── scripts/                 # Utility scripts
 ```
@@ -239,9 +256,12 @@ uv run streamlit run admin/app.py
 Access at: **http://localhost:8501**
 
 Features:
-- Call logs & transcripts
+- Call logs & transcripts (with PII masking)
 - Reservation management
 - Analytics dashboard
+- **Menu Editor** - Add/edit menu items with Hindi translations
+- **FAQ Editor** - Manage FAQs, policies, and announcements
+- **Knowledge Test** - Test RAG retrieval before going live
 - Configuration editor
 
 ## 🚢 Deployment
@@ -286,8 +306,10 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - [Deepgram](https://deepgram.com) - Speech-to-text
 - [Groq](https://groq.com) - Fast LLM inference
-- [Piper](https://github.com/rhasspy/piper) - Offline TTS
+- [Piper](https://github.com/rhasspy/piper) - Offline Hindi TTS
+- [ChromaDB](https://trychroma.com) - Vector database for RAG
 - [FastAPI](https://fastapi.tiangolo.com) - Web framework
+- [Streamlit](https://streamlit.io) - Admin dashboard
 
 ---
 

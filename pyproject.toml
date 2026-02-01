@@ -39,6 +39,9 @@ dependencies = [
     "aiohttp>=3.11.0,<4",
     # Logging
     "loguru>=0.7.0,<0.8",
+    # Knowledge Base / RAG
+    "chromadb>=0.5.0,<1",
+    "sentence-transformers>=3.0.0,<4",
     # CRUD Generation (runtime - used in API routes)
     "fastapi-crudrouter>=0.8.0,<0.9",
     # Observability

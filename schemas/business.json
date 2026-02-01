@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Business",
+  "description": "Business entity for multi-tenant voice bot platform",
+  "type": "object",
+  "required": ["id", "name", "type", "timezone", "status"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Business slug identifier (e.g., himalayan_kitchen)",
+      "pattern": "^[a-z][a-z0-9_]{2,49}$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name of the business",
+      "maxLength": 200
+    },
+    "type": {
+      "type": "string",
+      "enum": ["restaurant", "clinic", "salon", "other"],
+      "description": "Type of business"
+    },
+    "timezone": {
+      "type": "string",
+      "description": "IANA timezone (e.g., Asia/Kolkata)",
+      "default": "Asia/Kolkata"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "suspended", "onboarding"],
+      "default": "onboarding",
+      "description": "Business account status"
+    },
+    "phone_numbers_json": {
+      "type": "string",
+      "description": "JSON array of phone numbers in E.164 format"
+    },
+    "operating_hours_json": {
+      "type": "string",
+      "description": "JSON object mapping day names to hours (e.g., {\"monday\": \"closed\", \"tuesday\": \"11:00-22:30\"})"
+    },
+    "reservation_rules_json": {
+      "type": "string",
+      "description": "JSON object with reservation rules (min_party_size, max_phone_party_size, total_seats, etc.)"
+    },
+    "greeting_text": {
+      "type": "string",
+      "description": "Custom greeting for voice calls",
+      "maxLength": 500
+    },
+    "menu_summary": {
+      "type": "string",
+      "description": "Brief menu/service summary for LLM context",
+      "maxLength": 2000
+    },
+    "admin_password_hash": {
+      "type": "string",
+      "description": "bcrypt hash for business-specific admin access"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

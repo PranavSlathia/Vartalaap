@@ -12,8 +12,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from src.api.websocket.audio_stream import call_registry
+from src.api.websocket.audio_stream import CallCapacityError, call_registry
 from src.config import Settings, get_settings
+from src.db.repositories.businesses import AsyncBusinessRepository
 from src.db.repositories.calls import AsyncCallLogRepository
 from src.db.session import get_session_context
 from src.logging_config import get_logger
@@ -68,12 +69,52 @@ async def plivo_answer_webhook(
         except Exception as e:
             logger.warning(f"Failed to hash caller ID: {e}")
 
-    # Pre-create session in registry
-    await call_registry.create(
-        call_info.call_uuid,
-        caller_id_hash=caller_id_hash,
-        settings=settings,
-    )
+    # Resolve business from "To" phone number
+    # SECURITY: Do NOT default to any business - fail safely if unknown
+    business_id: str | None = None
+    greeting_text = None
+
+    if call_info.to_number:
+        try:
+            async with get_session_context() as db_session:
+                repo = AsyncBusinessRepository(db_session)
+                business = await repo.get_by_phone_number(call_info.to_number)
+                if business:
+                    business_id = business.id
+                    greeting_text = business.greeting_text
+                    logger.info(f"Resolved business: {business_id} for {call_info.to_number[-4:]}")
+                else:
+                    logger.warning(
+                        f"No business configured for phone {call_info.to_number[-4:]}"
+                    )
+        except Exception as e:
+            logger.error(f"Failed to resolve business: {e}")
+
+    # SECURITY: If no business found, return error and hangup - never route to wrong business
+    if business_id is None:
+        logger.error(
+            f"Call {call_info.call_uuid} rejected: no business for {call_info.to_number[-4:]}"
+        )
+        xml_response = plivo.generate_hangup_xml(
+            reason="Yeh number abhi configure nahi hai. Kripya baad mein try karein."
+        )
+        return Response(content=xml_response, media_type="application/xml")
+
+    # Pre-create session in registry (with capacity check)
+    try:
+        await call_registry.create(
+            call_info.call_uuid,
+            business_id=business_id,
+            caller_id_hash=caller_id_hash,
+            greeting_text=greeting_text,
+            settings=settings,
+        )
+    except CallCapacityError:
+        logger.warning(f"Call {call_info.call_uuid} rejected: system at capacity")
+        xml_response = plivo.generate_hangup_xml(
+            reason="Abhi hamari lines busy hain. Kripya kuch der baad call karein."
+        )
+        return Response(content=xml_response, media_type="application/xml")
 
     # Build WebSocket URL for audio streaming
     # Use forwarded headers if behind proxy

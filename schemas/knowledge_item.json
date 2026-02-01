@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "KnowledgeItem",
+  "description": "Knowledge base item for RAG retrieval during voice calls",
+  "type": "object",
+  "required": ["id", "business_id", "category", "title", "content"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier (UUID)"
+    },
+    "business_id": {
+      "type": "string",
+      "description": "Business this item belongs to (tenant isolation)"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["menu_item", "faq", "policy", "announcement"],
+      "description": "Type of knowledge item"
+    },
+    "title": {
+      "type": "string",
+      "description": "Item title (e.g., 'Veg Momos', 'Cancellation Policy')",
+      "maxLength": 200
+    },
+    "title_hindi": {
+      "type": "string",
+      "description": "Title in Hindi/Devanagari for better retrieval",
+      "maxLength": 200
+    },
+    "content": {
+      "type": "string",
+      "description": "Full content/description",
+      "maxLength": 2000
+    },
+    "content_hindi": {
+      "type": "string",
+      "description": "Content in Hindi for bilingual support",
+      "maxLength": 2000
+    },
+    "metadata_json": {
+      "type": "string",
+      "description": "JSON object with category-specific metadata (price, is_vegetarian, keywords, etc.)"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this item is active for retrieval"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 50,
+      "description": "Priority for ranking (higher = more important)"
+    },
+    "embedding_id": {
+      "type": "string",
+      "description": "ChromaDB document ID for vector retrieval"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

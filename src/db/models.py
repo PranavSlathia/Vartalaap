@@ -6,14 +6,25 @@ These models extend the generated Pydantic schemas and add:
 - Default values (timestamps, UUIDs)
 - Indexes for common queries
 
-DO NOT add validation here - that belongs in the JSON Schema.
+JSON field validation is added for data integrity.
 """
 
+from __future__ import annotations
+
+import json
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
 from uuid import uuid4
 
+from pydantic import field_validator
 from sqlmodel import Field, SQLModel
+
+# Valid day names for operating hours
+VALID_DAYS = frozenset({
+    "monday", "tuesday", "wednesday", "thursday",
+    "friday", "saturday", "sunday",
+})
 
 # =============================================================================
 # Enums (shared across models)
@@ -84,6 +95,32 @@ class AuditAction(str, Enum):
     data_purge = "data_purge"
     login = "login"
     logout = "logout"
+
+
+class BusinessType(str, Enum):
+    """Type of business."""
+
+    restaurant = "restaurant"
+    clinic = "clinic"
+    salon = "salon"
+    other = "other"
+
+
+class BusinessStatus(str, Enum):
+    """Business account status."""
+
+    active = "active"
+    suspended = "suspended"
+    onboarding = "onboarding"
+
+
+class KnowledgeCategory(str, Enum):
+    """Category of knowledge item."""
+
+    menu_item = "menu_item"
+    faq = "faq"
+    policy = "policy"
+    announcement = "announcement"
 
 
 # =============================================================================
@@ -207,3 +244,171 @@ class AuditLog(SQLModel, table=True):
     admin_user: str | None = Field(default=None)
     details: str | None = Field(default=None, description="JSON with before/after values")
     ip_address: str | None = Field(default=None)
+
+
+# =============================================================================
+# Multi-Business Models
+# =============================================================================
+
+
+class Business(SQLModel, table=True):
+    """Business entity for multi-tenant support."""
+
+    __tablename__ = "businesses"
+
+    id: str = Field(
+        primary_key=True,
+        description="Business slug identifier (e.g., himalayan_kitchen)",
+        max_length=50,
+    )
+    name: str = Field(max_length=200, description="Display name of the business")
+    type: BusinessType = Field(default=BusinessType.restaurant)
+    timezone: str = Field(default="Asia/Kolkata", max_length=50)
+    status: BusinessStatus = Field(default=BusinessStatus.onboarding, index=True)
+    phone_numbers_json: str | None = Field(
+        default=None, description="JSON array of phone numbers in E.164 format"
+    )
+    operating_hours_json: str | None = Field(
+        default=None, description="JSON object mapping day names to hours"
+    )
+    reservation_rules_json: str | None = Field(
+        default=None, description="JSON object with reservation rules"
+    )
+    greeting_text: str | None = Field(
+        default=None, max_length=500, description="Custom greeting for voice calls"
+    )
+    menu_summary: str | None = Field(
+        default=None, max_length=2000, description="Brief menu/service summary for LLM"
+    )
+    admin_password_hash: str | None = Field(
+        default=None, description="bcrypt hash for business-specific admin access"
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("operating_hours_json", mode="before")
+    @classmethod
+    def validate_operating_hours(cls, v: Any) -> str | None:
+        """Validate operating_hours_json structure."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                data = json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON: {e}") from e
+        else:
+            data = v
+            v = json.dumps(v)
+
+        if not isinstance(data, dict):
+            raise ValueError("operating_hours must be an object")
+        for day in data.keys():
+            if day.lower() not in VALID_DAYS:
+                raise ValueError(f"Invalid day name: {day}")
+        return v
+
+    @field_validator("phone_numbers_json", mode="before")
+    @classmethod
+    def validate_phone_numbers(cls, v: Any) -> str | None:
+        """Validate phone_numbers_json is a list of E.164 numbers."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                data = json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON: {e}") from e
+        else:
+            data = v
+            v = json.dumps(v)
+
+        if not isinstance(data, list):
+            raise ValueError("phone_numbers must be an array")
+        for phone in data:
+            if not isinstance(phone, str) or not phone.startswith("+"):
+                raise ValueError(f"Invalid E.164 phone number: {phone}")
+        return v
+
+    @field_validator("reservation_rules_json", mode="before")
+    @classmethod
+    def validate_reservation_rules(cls, v: Any) -> str | None:
+        """Validate reservation_rules_json structure."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                data = json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON: {e}") from e
+        else:
+            data = v
+            v = json.dumps(v)
+
+        if not isinstance(data, dict):
+            raise ValueError("reservation_rules must be an object")
+        # Validate expected keys have correct types
+        if "min_party_size" in data and not isinstance(data["min_party_size"], int):
+            raise ValueError("min_party_size must be an integer")
+        if "max_phone_party_size" in data and not isinstance(data["max_phone_party_size"], int):
+            raise ValueError("max_phone_party_size must be an integer")
+        if "total_seats" in data and not isinstance(data["total_seats"], int):
+            raise ValueError("total_seats must be an integer")
+        return v
+
+
+class BusinessPhoneNumber(SQLModel, table=True):
+    """Phone number lookup table for business resolution."""
+
+    __tablename__ = "business_phone_numbers"
+
+    phone_number: str = Field(
+        primary_key=True,
+        description="Phone number in E.164 format",
+        max_length=20,
+    )
+    business_id: str = Field(
+        foreign_key="businesses.id",
+        index=True,
+        description="Business this number belongs to",
+    )
+    is_primary: bool = Field(default=False, description="Whether this is the primary number")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class KnowledgeItem(SQLModel, table=True):
+    """Knowledge base item for RAG retrieval during voice calls."""
+
+    __tablename__ = "knowledge_items"
+
+    id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        primary_key=True,
+        description="Unique identifier",
+    )
+    business_id: str = Field(
+        foreign_key="businesses.id",
+        index=True,
+        description="Business this item belongs to (tenant isolation)",
+    )
+    category: KnowledgeCategory = Field(
+        index=True, description="Type of knowledge item"
+    )
+    title: str = Field(max_length=200, description="Item title")
+    title_hindi: str | None = Field(
+        default=None, max_length=200, description="Title in Hindi/Devanagari"
+    )
+    content: str = Field(max_length=2000, description="Full content/description")
+    content_hindi: str | None = Field(
+        default=None, max_length=2000, description="Content in Hindi"
+    )
+    metadata_json: str | None = Field(
+        default=None, description="JSON object with category-specific metadata"
+    )
+    is_active: bool = Field(default=True, index=True, description="Active for retrieval")
+    priority: int = Field(default=50, ge=0, le=100, description="Priority for ranking")
+    embedding_id: str | None = Field(
+        default=None, description="ChromaDB document ID for vector retrieval"
+    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
