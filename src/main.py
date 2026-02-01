@@ -4,11 +4,15 @@ Vartalaap - Voice bot platform for local Indian businesses.
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from src.api.routes import health
+from src.api.routes import crud, health, metrics, plivo_webhook, voice
+from src.api.websocket.audio_stream import audio_stream_endpoint, call_registry
 from src.config import get_settings
 from src.db.session import close_db, init_db
 from src.logging_config import setup_logging
@@ -23,6 +27,7 @@ async def lifespan(app: FastAPI):
     - Initialize database
 
     Shutdown:
+    - Close active call sessions
     - Close database connections
     """
     settings = get_settings()
@@ -41,6 +46,10 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    # Close all active call sessions
+    await call_registry.close_all()
+
+    # Close database
     await close_db()
 
 
@@ -66,13 +75,33 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Include routers
+    # Health check routes
     app.include_router(health.router, tags=["Health"])
 
-    # Future routers:
-    # app.include_router(plivo_webhook.router, prefix="/api", tags=["Plivo"])
-    # app.include_router(crud.router, prefix="/api", tags=["CRUD"])
-    # app.websocket("/ws/audio/{call_uuid}")(audio_stream_endpoint)
+    # Plivo webhook routes
+    app.include_router(plivo_webhook.router, prefix="/api", tags=["Plivo"])
+
+    # CRUD routes for reservations
+    app.include_router(crud.router, prefix="/api", tags=["CRUD"])
+
+    # Metrics endpoint for Prometheus scraping
+    app.include_router(metrics.router, tags=["Observability"])
+
+    # Voice testing routes
+    app.include_router(voice.router, prefix="/api", tags=["Voice"])
+
+    # WebSocket endpoint for audio streaming
+    @app.websocket("/ws/audio/{call_id}")
+    async def audio_ws(websocket: WebSocket, call_id: str):
+        """WebSocket endpoint for Plivo audio streaming."""
+        await audio_stream_endpoint(websocket, call_id)
+
+    # Serve voice test UI
+    @app.get("/voice")
+    async def voice_ui():
+        """Serve the voice testing UI."""
+        static_path = Path(__file__).parent / "api" / "static" / "voice.html"
+        return FileResponse(static_path, media_type="text/html")
 
     return app
 

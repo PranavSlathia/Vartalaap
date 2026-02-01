@@ -1,8 +1,221 @@
-from fastapi import APIRouter, Request
+"""Plivo webhook handlers for call lifecycle management.
 
-router = APIRouter()
+Handles:
+- Answer webhook: Returns XML to initiate WebSocket streaming
+- Hangup webhook: Logs call metrics and cleans up
+- Fallback webhook: Error handling
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Depends, Request, Response
+
+from src.api.websocket.audio_stream import call_registry
+from src.config import Settings, get_settings
+from src.db.repositories.calls import AsyncCallLogRepository
+from src.db.session import get_session_context
+from src.logging_config import get_logger
+from src.security.crypto import hash_phone_for_dedup
+from src.services.telephony.plivo import PlivoCallInfo, PlivoService
+
+router = APIRouter(prefix="/plivo", tags=["Plivo"])
+logger: Any = get_logger(__name__)
 
 
-@router.post("/plivo/webhook")
-async def plivo_webhook(request: Request):
+def get_plivo_service(settings: Settings = Depends(get_settings)) -> PlivoService:
+    """Dependency injection for PlivoService."""
+    return PlivoService(settings=settings)
+
+
+@router.post("/webhook/answer")
+async def plivo_answer_webhook(
+    request: Request,
+    plivo: PlivoService = Depends(get_plivo_service),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """Handle incoming call answer event from Plivo.
+
+    Returns XML that initiates bidirectional audio streaming.
+
+    Expected form data:
+    - CallUUID: Unique call identifier
+    - From: Caller phone number
+    - To: Called phone number
+    - Direction: inbound/outbound
+    - CallStatus: current call status
+    """
+    form_data = await request.form()
+    form_dict = {k: str(v) for k, v in form_data.items()}
+
+    # Parse call info
+    call_info = PlivoCallInfo.from_webhook(form_dict)
+
+    logger.info(
+        f"Call answered: {call_info.call_uuid}",
+        extra={
+            "direction": call_info.direction,
+            "to": call_info.to_number[-4:] if call_info.to_number else "",
+        },
+    )
+
+    # Hash caller phone for privacy (never log raw number)
+    caller_id_hash = None
+    if call_info.from_number:
+        try:
+            caller_id_hash = hash_phone_for_dedup(call_info.from_number)
+        except Exception as e:
+            logger.warning(f"Failed to hash caller ID: {e}")
+
+    # Pre-create session in registry
+    await call_registry.create(
+        call_info.call_uuid,
+        caller_id_hash=caller_id_hash,
+        settings=settings,
+    )
+
+    # Build WebSocket URL for audio streaming
+    # Use forwarded headers if behind proxy
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:8000")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    scheme = "wss" if proto == "https" else "ws"
+    websocket_url = f"{scheme}://{host}/ws/audio/{call_info.call_uuid}"
+
+    # Determine content type based on settings
+    if settings.plivo_audio_format == "mulaw":
+        content_type = "audio/basic"  # μ-law
+    else:
+        content_type = f"audio/x-l16;rate={settings.plivo_sample_rate}"
+
+    # Generate XML response to initiate streaming
+    xml_response = plivo.generate_stream_xml(
+        websocket_url=websocket_url,
+        bidirectional=True,
+        content_type=content_type,
+    )
+
+    logger.debug(f"Returning stream XML for {call_info.call_uuid}")
+
+    return Response(
+        content=xml_response,
+        media_type="application/xml",
+    )
+
+
+@router.post("/webhook/hangup")
+async def plivo_hangup_webhook(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, bool]:
+    """Handle call hangup event from Plivo.
+
+    Logs call metrics and cleans up session.
+
+    Expected form data:
+    - CallUUID: Unique call identifier
+    - Duration: Call duration in seconds
+    - HangupCause: Reason for hangup
+    - EndTime: When call ended
+    """
+    form_data = await request.form()
+
+    call_uuid = str(form_data.get("CallUUID", ""))
+    duration = str(form_data.get("Duration", "0"))
+    hangup_cause = str(form_data.get("HangupCause", ""))
+
+    logger.info(
+        f"Call ended: {call_uuid}",
+        extra={"duration": duration, "cause": hangup_cause},
+    )
+
+    # Get session and persist final metrics
+    result = await call_registry.get(call_uuid)
+    if result:
+        session, pipeline = result
+
+        try:
+            # Finalize pipeline and get metrics
+            metrics = await pipeline.finalize()
+
+            # Log to database
+            async with get_session_context() as db_session:
+                repo = AsyncCallLogRepository(db_session)
+                await repo.upsert_call_log(
+                    call_id=call_uuid,
+                    business_id=session.business_id,
+                    caller_id_hash=session.caller_id_hash,
+                    duration_seconds=int(duration),
+                    transcript=metrics.get("transcript"),
+                    detected_language=session.detected_language,
+                )
+                await db_session.commit()
+
+            logger.info(f"Persisted final metrics for {call_uuid}")
+
+        except Exception as e:
+            logger.error(f"Error persisting call metrics: {e}")
+
+        # Cleanup registry
+        await call_registry.remove(call_uuid)
+
     return {"ok": True}
+
+
+@router.post("/webhook/fallback")
+async def plivo_fallback_webhook(
+    request: Request,
+    plivo: PlivoService = Depends(get_plivo_service),
+) -> Response:
+    """Fallback handler for Plivo errors.
+
+    Called when the primary answer webhook fails.
+    Returns a simple apology message and hangs up.
+    """
+    form_data = await request.form()
+    call_uuid = str(form_data.get("CallUUID", ""))
+    error = str(form_data.get("ErrorMessage", "Unknown error"))
+
+    logger.error(f"Plivo fallback triggered: {call_uuid} - {error}")
+
+    # Return hangup XML with apology
+    xml_response = plivo.generate_hangup_xml(
+        reason="Maaf kijiye, technical problem aa gayi hai. Kripya baad mein call karein."
+    )
+
+    return Response(
+        content=xml_response,
+        media_type="application/xml",
+    )
+
+
+@router.post("/webhook/ringing")
+async def plivo_ringing_webhook(request: Request) -> dict[str, bool]:
+    """Handle call ringing event (optional).
+
+    Can be used for analytics or early session setup.
+    """
+    form_data = await request.form()
+    call_uuid = str(form_data.get("CallUUID", ""))
+
+    logger.debug(f"Call ringing: {call_uuid}")
+
+    return {"ok": True}
+
+
+@router.get("/health")
+async def plivo_health(
+    plivo: PlivoService = Depends(get_plivo_service),
+) -> dict[str, Any]:
+    """Check Plivo service health.
+
+    Verifies:
+    - Plivo API credentials are valid
+    - Call registry is accessible
+    """
+    plivo_healthy = await plivo.health_check()
+
+    return {
+        "healthy": plivo_healthy,
+        "active_calls": call_registry.active_count,
+    }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
@@ -105,6 +106,80 @@ class GroqService:
         generator = self._stream_with_metadata(api_messages, max_tokens, temperature, metadata)
 
         return generator, metadata
+
+    async def extract_json(
+        self,
+        messages: list[dict],
+        *,
+        max_tokens: int = 256,
+        temperature: float = 0.0,
+    ) -> dict:
+        """Extract structured JSON from a conversation.
+
+        Uses Groq's JSON response format for reliable structured output.
+
+        Args:
+            messages: List of message dicts with role/content
+            max_tokens: Maximum response tokens
+            temperature: Low temperature (0.0) for deterministic extraction
+
+        Returns:
+            Parsed JSON dict from LLM response
+
+        Raises:
+            LLMRateLimitError: When rate limit exceeded
+            LLMConnectionError: When API unreachable
+            LLMServiceError: For other API errors or JSON parse failure
+        """
+        # Estimate tokens for rate limiting
+        estimated_input_tokens = sum(self.estimate_tokens(m["content"]) for m in messages)
+        estimated_total = estimated_input_tokens + max_tokens
+
+        # Check rate limit
+        await self._rate_limiter.acquire(estimated_total)
+
+        try:
+            response = await self.client.chat.completions.create(  # type: ignore[call-overload]
+                messages=messages,
+                model=self._model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content
+            if not content:
+                raise LLMServiceError("Empty response from Groq JSON extraction")
+
+            # Update rate limiter with actual usage
+            if response.usage:
+                self._rate_limiter.record_usage(response.usage.total_tokens)
+
+            result: dict[str, Any] = json.loads(content)
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from Groq response: {e}")
+            raise LLMServiceError(f"Invalid JSON in response: {e}") from e
+
+        except groq.RateLimitError as e:
+            logger.warning(f"Groq rate limit hit during extraction: {e}")
+            raise LLMRateLimitError(
+                "Rate limit exceeded",
+                retry_after=self._extract_retry_after(e),
+            ) from e
+
+        except groq.APIConnectionError as e:
+            logger.error(f"Groq connection error during extraction: {e.__cause__}")
+            raise LLMConnectionError("Failed to connect to Groq API") from e
+
+        except groq.AuthenticationError as e:
+            logger.error("Groq authentication failed during extraction")
+            raise LLMAuthenticationError("Invalid Groq API key") from e
+
+        except groq.APIStatusError as e:
+            logger.error(f"Groq API error during extraction: {e.status_code} - {e.message}")
+            raise LLMServiceError(f"Groq API error: {e.status_code}") from e
 
     async def _stream_with_metadata(
         self,
@@ -212,15 +287,29 @@ class GroqService:
         if context.caller_history:
             prompt += f"\n## Caller History\n{context.caller_history}\n"
 
-        prompt += """
+        # Use custom prompt template if available, otherwise default guidelines
+        if context.prompt_template:
+            prompt += f"\n## Guidelines\n{context.prompt_template}\n"
+        else:
+            prompt += """
 ## Guidelines
 - Be concise - responses should be 1-2 sentences for voice
 - Use natural, conversational language
 - Adapt to Hindi, English, or Hinglish based on caller's language
-- Always confirm reservation details before finalizing
-- Do not accept delivery orders - politely redirect
-- If unsure about availability, offer to check and call back
+- For Hindi speakers, use polite forms ("ji", "aap")
+- Always confirm reservation details before finalizing (date, time, party size, name)
+- Do not accept delivery orders - politely redirect to Zomato/Swiggy
+- For large parties (>10), redirect to WhatsApp
+- If unsure about availability, offer to check and call back via WhatsApp
 """
+
+        # Add few-shot examples if available
+        if context.few_shot_examples:
+            prompt += "\n## Example Conversations\n"
+            for i, example in enumerate(context.few_shot_examples, 1):
+                prompt += f"Example {i}:\n"
+                prompt += f"  User: {example['user']}\n"
+                prompt += f"  Assistant: {example['assistant']}\n\n"
 
         return prompt
 

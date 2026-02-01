@@ -42,6 +42,8 @@ class ConversationContext:
     menu_summary: str | None = None
     current_capacity: int | None = None
     caller_history: str | None = None
+    prompt_template: str | None = None  # Custom prompt template from config
+    few_shot_examples: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass

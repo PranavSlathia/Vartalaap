@@ -168,7 +168,7 @@ dependencies = [
 ```toml
 [project]
 dependencies = [
-    "plivo>=4.60.0",
+    "plivo>=4.55.0",
 ]
 ```
 
@@ -431,7 +431,7 @@ warn_unused_ignores = true
 ```toml
 [project.optional-dependencies]
 dev = [
-    "ward>=0.68.0",
+    "ward>=0.67.0",
     "pytest-asyncio>=0.24.0",
     "coverage>=7.0.0",
 ]
@@ -664,7 +664,7 @@ dependencies = [
     "piper-tts>=1.2.0,<2",
     "edge-tts>=6.1.0,<7",  # Feature-flagged fallback
     "groq>=0.13.0,<1",
-    "plivo>=4.60.0,<5",
+    "plivo>=4.55.0,<5",
 
     # Audio Processing
     "soundfile>=0.12.0,<0.13",
@@ -705,7 +705,7 @@ dev = [
     "mypy>=1.14.0",
     "pre-commit>=4.0.0",
     # Testing
-    "ward>=0.68.0",
+    "ward>=0.67.0",
     "pytest-asyncio>=0.24.0",
     "coverage>=7.0.0",
     # Code Generation (dev-only tools)

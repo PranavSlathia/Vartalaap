@@ -9,6 +9,7 @@ from typing import Callable
 import bcrypt
 import streamlit as st
 
+from src.config import get_settings
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -19,7 +20,8 @@ SESSION_TIMEOUT_SECONDS = 30 * 60
 def _verify_credentials(username: str, password: str) -> bool:
     """Verify username/password against env vars."""
     expected_username = os.environ.get("ADMIN_USERNAME", "admin")
-    password_hash = os.environ.get("ADMIN_PASSWORD_HASH", "")
+    settings = get_settings()
+    password_hash = settings.admin_password_hash
 
     if not password_hash:
         logger.error("ADMIN_PASSWORD_HASH not configured for admin UI")

@@ -9,13 +9,16 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from src.core.context import ConversationManager
+from src.core.conversation_state import ConversationPhase, ConversationState
 from src.logging_config import get_logger
 from src.services.llm.exceptions import LLMConnectionError, LLMRateLimitError
+from src.services.llm.extractor import ReservationExtractor
 from src.services.llm.groq import GroqService
 from src.services.stt.deepgram import DeepgramService
 from src.services.stt.protocol import DetectedLanguage, TranscriptChunk
 
 if TYPE_CHECKING:
+    from src.core.reservation_flow import ReservationFlow
     from src.services.llm.protocol import StreamMetadata
 
 logger: Any = get_logger(__name__)
@@ -44,6 +47,12 @@ class CallSession:
     _llm: GroqService = field(default_factory=GroqService, init=False, repr=False)
     _stt: DeepgramService = field(default_factory=DeepgramService, init=False, repr=False)
     _conversation: ConversationManager = field(init=False, repr=False)
+    _extractor: ReservationExtractor = field(init=False, repr=False)
+    _state: ConversationState = field(default_factory=ConversationState, init=False, repr=False)
+    _flow: ReservationFlow | None = field(default=None, init=False, repr=False)
+
+    # Caller info for reservation creation
+    caller_phone_encrypted: str | None = None
 
     # Metrics
     total_llm_tokens: int = field(default=0, init=False)
@@ -61,6 +70,7 @@ class CallSession:
             business_id=self.business_id,
             max_history=10,
         )
+        self._extractor = ReservationExtractor(llm_service=self._llm)
 
     async def process_user_input(
         self,
@@ -115,8 +125,26 @@ class CallSession:
             full_response = FALLBACK_RESPONSE
             metadata = StreamMetadata(model="fallback")
 
+        # Run extraction to get structured data
+        extraction = await self._extractor.extract(
+            user_message=transcript,
+            assistant_response=full_response,
+            conversation_history=self._conversation.messages,
+        )
+
+        # Process through reservation flow if available
+        if extraction and self._flow:
+            response_override, self._state = await self._flow.process_extraction(
+                extraction, self._state
+            )
+            if response_override:
+                full_response = response_override
+
         # Add to history
         self._conversation.add_assistant_message(full_response)
+
+        # Cache last response for DTMF repeat
+        self._state.last_response = full_response
 
         # Update metrics
         self.total_llm_calls += 1
@@ -168,8 +196,26 @@ class CallSession:
             yield full_response
             metadata = None
 
+        # Run extraction
+        extraction = await self._extractor.extract(
+            user_message=transcript,
+            assistant_response=full_response,
+            conversation_history=self._conversation.messages,
+        )
+
+        # Process through reservation flow if available
+        if extraction and self._flow:
+            response_override, self._state = await self._flow.process_extraction(
+                extraction, self._state
+            )
+            # Note: For streaming, we don't yield the override since streaming already happened
+            # The state is still updated for future turns
+
         # Add to history
         self._conversation.add_assistant_message(full_response)
+
+        # Cache last response for DTMF repeat
+        self._state.last_response = full_response
 
         # Update metrics
         self.total_llm_calls += 1
@@ -302,7 +348,52 @@ class CallSession:
         """Get conversation transcript for DB storage."""
         return self._conversation.get_transcript()
 
+    def set_reservation_flow(self, flow: ReservationFlow) -> None:
+        """Set the reservation flow for this session.
+
+        Should be called after session creation when a database session is available.
+        """
+        self._flow = flow
+
+    @property
+    def state(self) -> ConversationState:
+        """Get current conversation state."""
+        return self._state
+
+    @property
+    def last_response(self) -> str:
+        """Get last response for DTMF repeat functionality."""
+        return self._state.last_response
+
+    @property
+    def is_transferred(self) -> bool:
+        """Check if call has been transferred to operator."""
+        return self._state.phase == ConversationPhase.TRANSFERRED
+
+    async def handle_confirmation(self, confirmed: bool) -> str | None:
+        """Handle user confirmation of reservation.
+
+        Args:
+            confirmed: Whether user confirmed the booking
+
+        Returns:
+            Response message, or None if no flow/reservation
+        """
+        if not self._flow or not self._state.pending_reservation:
+            return None
+
+        response, self._state = await self._flow.handle_confirmation(
+            confirmed=confirmed,
+            state=self._state,
+            caller_phone_encrypted=self.caller_phone_encrypted,
+            call_log_id=self.call_id,
+        )
+
+        self._state.last_response = response
+        return response
+
     async def close(self) -> None:
         """Clean up session resources."""
         await self._llm.close()
         await self._stt.close()
+        await self._extractor.close()

@@ -63,6 +63,10 @@ class ConversationManager:
         except KeyError:
             tz = ZoneInfo("Asia/Kolkata")
 
+        # Load prompt template and few-shot examples
+        prompt_template = self._load_prompt_template()
+        few_shot_examples = self._get_few_shot_examples()
+
         return ConversationContext(
             business_name=business.get("name", "Restaurant"),
             business_type=business.get("type", "restaurant"),
@@ -72,6 +76,8 @@ class ConversationManager:
             reservation_rules=rules,
             current_capacity=current_capacity,
             caller_history=caller_history,
+            prompt_template=prompt_template,
+            few_shot_examples=few_shot_examples,
         )
 
     def _load_business_config(self) -> dict:
@@ -84,6 +90,35 @@ class ConversationManager:
             else:
                 self._business_config = {}
         return self._business_config
+
+    def _load_prompt_template(self) -> str | None:
+        """Load prompt template from config files.
+
+        Tries business-specific template first, then falls back to generic.
+        """
+        paths = [
+            Path(f"config/prompts/{self.business_id}_bot.txt"),
+            Path("config/prompts/restaurant_bot.txt"),
+        ]
+
+        for path in paths:
+            if path.exists():
+                return path.read_text()
+
+        return None
+
+    def _get_few_shot_examples(self) -> list[dict[str, str]]:
+        """Get few-shot examples for the LLM.
+
+        Uses the RestaurantPromptBuilder's examples.
+        """
+        from src.prompts.restaurant import FEW_SHOT_EXAMPLES
+
+        # Return first 6 examples to save tokens (already subset in builder)
+        return [
+            {"user": ex["user"], "assistant": ex["assistant"]}
+            for ex in FEW_SHOT_EXAMPLES[:6]
+        ]
 
     def get_transcript(self) -> str:
         """Get full conversation transcript for logging."""

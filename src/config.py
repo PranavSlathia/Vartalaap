@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     deepgram_api_key: SecretStr = Field(description="Deepgram API key for STT")
     plivo_auth_id: str = Field(description="Plivo Auth ID")
     plivo_auth_token: SecretStr = Field(description="Plivo Auth Token")
+    elevenlabs_api_key: SecretStr | None = Field(
+        default=None, description="ElevenLabs API key for realistic TTS"
+    )
 
     # ==========================================================================
     # Security Keys
@@ -98,6 +101,30 @@ class Settings(BaseSettings):
     tts_target_sample_rate: int = Field(
         default=8000,
         description="Target sample rate for TTS output (8000 for telephony)",
+    )
+
+    # ==========================================================================
+    # Telephony Configuration
+    # ==========================================================================
+    plivo_audio_format: Literal["mulaw", "linear16"] = Field(
+        default="linear16",
+        description="Audio format for Plivo streams (mulaw or linear16)",
+    )
+    plivo_sample_rate: int = Field(
+        default=16000,
+        description="Sample rate for Plivo audio (8000 or 16000)",
+    )
+    barge_in_enabled: bool = Field(
+        default=True,
+        description="Enable barge-in (user can interrupt bot speech)",
+    )
+    barge_in_threshold: float = Field(
+        default=500.0,
+        description="Audio energy threshold for barge-in detection",
+    )
+    greeting_text: str = Field(
+        default="Namaste! Himalayan Kitchen mein aapka swagat hai.",
+        description="Initial greeting when call connects",
     )
 
     # ==========================================================================

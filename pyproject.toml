@@ -8,46 +8,44 @@ dependencies = [
     "fastapi>=0.115.0,<0.116",
     "uvicorn[standard]>=0.34.0,<0.35",
     "websockets>=14.0,<15",
-
+    "python-multipart>=0.0.9",
     # Database
     "sqlmodel>=0.0.22,<0.1",
     "alembic>=1.14.0,<2",
     "aiosqlite>=0.20.0,<0.21",
-
+    "greenlet>=3.0.0",
     # Voice Pipeline
     "deepgram-sdk>=3.7.0,<4",
     "piper-tts>=1.2.0,<2",
     "edge-tts>=6.1.0,<7",
     "groq>=0.13.0,<1",
     "plivo>=4.55.0,<5",
-
     # Audio Processing
     "soundfile>=0.12.0,<0.13",
     "soxr>=0.5.0,<0.6",
     "numpy>=2.0.0,<3",
     "pydub>=0.25.1,<0.26",
     "miniaudio>=1.59,<2",
-
     # Background Tasks
     "arq>=0.26.0,<0.27",
     "redis[hiredis]>=5.0.0,<6",
-
     # Config
     "pydantic-settings>=2.5.0,<3",
     "pyyaml>=6.0.0,<7",
-
     # Security
     "cryptography>=44.0.0,<45",
     "bcrypt>=4.2.0,<5",
-
     # HTTP
     "aiohttp>=3.11.0,<4",
-
     # Logging
     "loguru>=0.7.0,<0.8",
-
     # CRUD Generation (runtime - used in API routes)
     "fastapi-crudrouter>=0.8.0,<0.9",
+    # Observability
+    "prometheus-client>=0.21.0,<0.22",
+    "sounddevice>=0.5.5",
+    "gtts>=2.5.4",
+    "elevenlabs>=2.33.1",
 ]
 
 [project.optional-dependencies]
@@ -93,7 +91,9 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 # B008: Allow function calls in defaults (required for FastAPI Depends/Query)
-per-file-ignores = { "src/api/routes/*.py" = ["B008"] }
+# E501: Allow long lines in prompts (LLM system prompts are intentionally long)
+# SIM105: Allow try/except/pass in some cases for clarity
+per-file-ignores = { "src/api/routes/*.py" = ["B008"], "src/prompts/*.py" = ["E501"], "src/services/llm/extractor.py" = ["E501", "SIM105"] }
 
 [tool.ruff.format]
 quote-style = "double"
@@ -110,4 +110,5 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "ruff>=0.14.14",
     "types-pyyaml>=6.0.12.20250915",
+    "httpx>=0.27.0",
 ]

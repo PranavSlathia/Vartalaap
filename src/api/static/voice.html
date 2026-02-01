@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vartalaap Voice Bot</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            padding: 30px 0;
+        }
+        header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        header p {
+            color: #888;
+            font-size: 14px;
+        }
+        .chat-container {
+            background: #1e1e30;
+            border-radius: 16px;
+            padding: 20px;
+            min-height: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message.user {
+            align-items: flex-end;
+        }
+        .message.bot {
+            align-items: flex-start;
+        }
+        .message-content {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        .message.user .message-content {
+            background: #4f46e5;
+            border-bottom-right-radius: 4px;
+        }
+        .message.bot .message-content {
+            background: #2d2d44;
+            border-bottom-left-radius: 4px;
+        }
+        .message-meta {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+        }
+        .record-btn {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: none;
+            background: #ef4444;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            line-height: 1.3;
+        }
+        .record-btn:hover {
+            transform: scale(1.05);
+            background: #dc2626;
+        }
+        .record-btn.recording {
+            background: #22c55e;
+            animation: pulse 1s infinite;
+        }
+        .record-btn.listening {
+            background: #f59e0b;
+        }
+        .record-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            animation: none;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            50% { box-shadow: 0 0 0 20px rgba(34, 197, 94, 0); }
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            color: #888;
+            font-size: 13px;
+        }
+        .status.error {
+            color: #ef4444;
+        }
+        .status.listening {
+            color: #22c55e;
+        }
+        .audio-player {
+            margin-top: 8px;
+        }
+        .audio-player audio {
+            width: 100%;
+            height: 36px;
+        }
+        .reset-btn {
+            background: #374151;
+            border: none;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .reset-btn:hover {
+            background: #4b5563;
+        }
+        .volume-bar {
+            width: 200px;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            margin: 10px auto;
+            overflow: hidden;
+        }
+        .volume-level {
+            height: 100%;
+            background: #22c55e;
+            width: 0%;
+            transition: width 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Himalayan Kitchen</h1>
+            <p>Voice Assistant - Click to speak, auto-stops when you finish</p>
+        </header>
+
+        <div class="chat-container" id="chat"></div>
+
+        <div class="volume-bar" id="volumeBar" style="display: none;">
+            <div class="volume-level" id="volumeLevel"></div>
+        </div>
+
+        <div class="status" id="status">Click the button and speak</div>
+
+        <div class="controls">
+            <button class="reset-btn" onclick="resetChat()">Reset</button>
+            <button class="record-btn" id="recordBtn" onclick="startRecording()">
+                Click to<br>Speak
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let sessionId = Date.now().toString();
+        let audioContext;
+        let analyser;
+        let silenceTimeout;
+        let hasSpoken = false;
+
+        const chat = document.getElementById('chat');
+        const status = document.getElementById('status');
+        const recordBtn = document.getElementById('recordBtn');
+        const volumeBar = document.getElementById('volumeBar');
+        const volumeLevel = document.getElementById('volumeLevel');
+
+        // Settings for silence detection
+        const SILENCE_THRESHOLD = 0.01;  // Volume threshold
+        const SILENCE_DURATION = 1500;   // 1.5 seconds of silence to stop
+        const MIN_RECORDING_TIME = 500;  // Minimum recording time
+
+        // Add initial greeting
+        addMessage('bot', 'Namaste! Himalayan Kitchen mein aapka swagat hai. Main aapki kya madad kar sakti hoon?');
+
+        async function startRecording() {
+            if (isRecording) return;
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // Set up audio analysis for silence detection
+                audioContext = new AudioContext();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                audioChunks = [];
+                hasSpoken = false;
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    volumeBar.style.display = 'none';
+                    stream.getTracks().forEach(track => track.stop());
+                    if (audioContext) audioContext.close();
+
+                    if (audioChunks.length > 0 && hasSpoken) {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        await sendAudio(audioBlob);
+                    } else {
+                        status.textContent = 'No speech detected. Click to try again.';
+                        recordBtn.disabled = false;
+                        recordBtn.innerHTML = 'Click to<br>Speak';
+                        recordBtn.classList.remove('recording', 'listening');
+                    }
+                };
+
+                mediaRecorder.start(100); // Collect data every 100ms
+                isRecording = true;
+                recordBtn.classList.add('listening');
+                recordBtn.innerHTML = 'Listening...';
+                status.textContent = 'Speak now... (auto-stops when you finish)';
+                status.className = 'status listening';
+                volumeBar.style.display = 'block';
+
+                // Start monitoring for silence
+                monitorAudio(stream);
+
+            } catch (err) {
+                status.textContent = 'Microphone access denied. Please allow microphone.';
+                status.className = 'status error';
+                console.error('Mic error:', err);
+            }
+        }
+
+        function monitorAudio(stream) {
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            let recordingStartTime = Date.now();
+
+            function checkAudio() {
+                if (!isRecording) return;
+
+                analyser.getByteFrequencyData(dataArray);
+
+                // Calculate volume level
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i];
+                }
+                const average = sum / dataArray.length / 255;
+
+                // Update volume bar
+                volumeLevel.style.width = (average * 100 * 3) + '%';
+
+                // Check if speaking
+                if (average > SILENCE_THRESHOLD) {
+                    hasSpoken = true;
+                    recordBtn.classList.remove('listening');
+                    recordBtn.classList.add('recording');
+                    recordBtn.innerHTML = 'Speaking...';
+
+                    // Reset silence timer
+                    if (silenceTimeout) {
+                        clearTimeout(silenceTimeout);
+                        silenceTimeout = null;
+                    }
+                } else if (hasSpoken && !silenceTimeout) {
+                    // Start silence timer only after user has spoken
+                    const elapsed = Date.now() - recordingStartTime;
+                    if (elapsed > MIN_RECORDING_TIME) {
+                        silenceTimeout = setTimeout(() => {
+                            stopRecording();
+                        }, SILENCE_DURATION);
+                    }
+                }
+
+                // Timeout after 30 seconds max
+                if (Date.now() - recordingStartTime > 30000) {
+                    stopRecording();
+                    return;
+                }
+
+                requestAnimationFrame(checkAudio);
+            }
+
+            checkAudio();
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+
+            if (silenceTimeout) {
+                clearTimeout(silenceTimeout);
+                silenceTimeout = null;
+            }
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordBtn.classList.remove('recording', 'listening');
+                recordBtn.innerHTML = 'Processing...';
+                recordBtn.disabled = true;
+                status.textContent = 'Processing your message...';
+                status.className = 'status';
+            }
+        }
+
+        async function sendAudio(audioBlob) {
+            try {
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                formData.append('session_id', sessionId);
+
+                const response = await fetch('/api/voice/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.transcript) {
+                    addMessage('user', data.transcript);
+                }
+
+                if (data.response) {
+                    addMessage('bot', data.response, data.audio_url);
+                }
+
+                if (data.error) {
+                    status.textContent = data.error;
+                    status.className = 'status error';
+                } else {
+                    status.textContent = 'Click the button to speak again';
+                    status.className = 'status';
+                }
+
+            } catch (err) {
+                status.textContent = 'Error: ' + err.message;
+                status.className = 'status error';
+                console.error('Send error:', err);
+            } finally {
+                recordBtn.disabled = false;
+                recordBtn.innerHTML = 'Click to<br>Speak';
+            }
+        }
+
+        function addMessage(role, text, audioUrl = null) {
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+
+            let html = `<div class="message-content">${escapeHtml(text)}</div>`;
+            html += `<div class="message-meta">${new Date().toLocaleTimeString()}</div>`;
+
+            if (audioUrl) {
+                html += `<div class="audio-player"><audio controls autoplay src="${audioUrl}"></audio></div>`;
+            }
+
+            div.innerHTML = html;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function resetChat() {
+            sessionId = Date.now().toString();
+            chat.innerHTML = '';
+            addMessage('bot', 'Namaste! Himalayan Kitchen mein aapka swagat hai. Main aapki kya madad kar sakti hoon?');
+            status.textContent = 'Conversation reset. Click to speak.';
+            status.className = 'status';
+        }
+    </script>
+</body>
+</html>
