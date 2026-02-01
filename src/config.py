@@ -91,7 +91,7 @@ class Settings(BaseSettings):
         description="Path to Piper ONNX model file. Defaults to data/models/piper/{voice}.onnx",
     )
     piper_voice: str = Field(
-        default="hi_IN-female-medium",
+        default="hi_IN-priyamvada-medium",
         description="Piper voice name (used for default model path)",
     )
     edge_tts_voice: str = Field(

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger: Any = get_logger(__name__)
 
 # Default Piper model configuration
-DEFAULT_PIPER_MODEL = "hi_IN-female-medium"
+DEFAULT_PIPER_MODEL = "hi_IN-priyamvada-medium"
 PIPER_SAMPLE_RATE = 22050  # Piper outputs 22050Hz
 
 
