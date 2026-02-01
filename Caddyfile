@@ -1,19 +1,124 @@
-# Main API domain
-vartalaap.yourdomain.com {
+# Vartalaap - Main Caddy Reverse Proxy Configuration
+#
+# Development: Use localhost addresses
+# Production: Replace with your actual domain and uncomment HTTPS settings
+#
+# Environment variable {$DOMAIN} can be set to override domain
+
+# =============================================================================
+# Development Configuration (localhost)
+# =============================================================================
+
+# Main app - React frontend + API
+:80 {
+    # Security headers
+    header {
+        # Allow microphone access in iframes (for voice test page)
+        Permissions-Policy "microphone=*"
+        # Standard security headers
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Voice test endpoint - needs microphone permissions
+    handle /voice {
+        header Permissions-Policy "microphone=*"
+        reverse_proxy api:8000
+    }
+
+    # API routes
     handle /api/* {
         reverse_proxy api:8000
     }
 
+    # WebSocket for Plivo audio streams
     handle /ws/* {
         reverse_proxy api:8000
     }
 
-    handle {
+    # OpenAPI docs
+    handle /docs* {
         reverse_proxy api:8000
+    }
+    handle /redoc* {
+        reverse_proxy api:8000
+    }
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+
+    # Health check
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    # Everything else goes to React frontend
+    handle {
+        reverse_proxy web:80
     }
 }
 
-# Admin panel on subdomain
-admin.vartalaap.yourdomain.com {
+# Keycloak auth on port 8080
+:8080 {
+    reverse_proxy keycloak:8080
+}
+
+# Admin panel on port 8501
+:8501 {
     reverse_proxy admin:8501
 }
+
+# =============================================================================
+# Production Configuration (uncomment and configure for production)
+# =============================================================================
+
+# {$DOMAIN:vartalaap.yourdomain.com} {
+#     # Enable HTTPS (Caddy handles certs automatically)
+#
+#     # Security headers
+#     header {
+#         # Allow microphone access in iframes (for voice test page)
+#         Permissions-Policy "microphone=*"
+#         # Standard security headers
+#         X-Content-Type-Options "nosniff"
+#         X-Frame-Options "SAMEORIGIN"
+#         Referrer-Policy "strict-origin-when-cross-origin"
+#         # HSTS for production
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains"
+#     }
+#
+#     # Voice test endpoint - needs microphone permissions
+#     handle /voice {
+#         header Permissions-Policy "microphone=*"
+#         reverse_proxy api:8000
+#     }
+#
+#     # API routes
+#     handle /api/* {
+#         reverse_proxy api:8000
+#     }
+#
+#     # WebSocket for Plivo audio streams
+#     handle /ws/* {
+#         reverse_proxy api:8000
+#     }
+#
+#     # Health check
+#     handle /health {
+#         reverse_proxy api:8000
+#     }
+#
+#     # Everything else goes to React frontend
+#     handle {
+#         reverse_proxy web:80
+#     }
+# }
+
+# auth.{$DOMAIN:vartalaap.yourdomain.com} {
+#     reverse_proxy keycloak:8080
+# }
+
+# admin.{$DOMAIN:vartalaap.yourdomain.com} {
+#     reverse_proxy admin:8501
+# }

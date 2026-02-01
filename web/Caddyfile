@@ -1,0 +1,28 @@
+# Caddyfile for serving React SPA static files
+:80 {
+    root * /srv
+
+    # Enable gzip compression
+    encode gzip
+
+    # SPA routing - try file, then directory, then index.html
+    try_files {path} {path}/ /index.html
+
+    # Serve static files
+    file_server
+
+    # Cache static assets (js, css, images)
+    @static {
+        path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2
+    }
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    # Don't cache index.html or silent-refresh.html
+    @nocache {
+        path /index.html /silent-refresh.html
+    }
+    header @nocache Cache-Control "no-store, no-cache, must-revalidate"
+
+    # Health check endpoint
+    respond /health 200
+}

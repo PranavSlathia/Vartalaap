@@ -1,0 +1,2546 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vartalaap API",
+    "description": "Voice bot platform for local Indian businesses",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "description": "Basic health check endpoint.\n\nReturns:\n    Simple status indicating the API is running.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/detailed": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Detailed Health Check",
+        "description": "Detailed health check including dependency status.\n\nChecks:\n- Database connectivity\n- Redis connectivity (if configured)\n- External service configuration status\n\nReturns:\n    Status with individual component checks.",
+        "operationId": "detailed_health_check_health_detailed_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plivo/webhook/answer": {
+      "post": {
+        "tags": [
+          "Plivo",
+          "Plivo"
+        ],
+        "summary": "Plivo Answer Webhook",
+        "description": "Handle incoming call answer event from Plivo.\n\nReturns XML that initiates bidirectional audio streaming.\n\nExpected form data:\n- CallUUID: Unique call identifier\n- From: Caller phone number\n- To: Called phone number\n- Direction: inbound/outbound\n- CallStatus: current call status",
+        "operationId": "plivo_answer_webhook_api_plivo_webhook_answer_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plivo/webhook/hangup": {
+      "post": {
+        "tags": [
+          "Plivo",
+          "Plivo"
+        ],
+        "summary": "Plivo Hangup Webhook",
+        "description": "Handle call hangup event from Plivo.\n\nLogs call metrics and cleans up session.\n\nExpected form data:\n- CallUUID: Unique call identifier\n- Duration: Call duration in seconds\n- HangupCause: Reason for hangup\n- EndTime: When call ended",
+        "operationId": "plivo_hangup_webhook_api_plivo_webhook_hangup_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Plivo Hangup Webhook Api Plivo Webhook Hangup Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plivo/webhook/fallback": {
+      "post": {
+        "tags": [
+          "Plivo",
+          "Plivo"
+        ],
+        "summary": "Plivo Fallback Webhook",
+        "description": "Fallback handler for Plivo errors.\n\nCalled when the primary answer webhook fails.\nReturns a simple apology message and hangs up.",
+        "operationId": "plivo_fallback_webhook_api_plivo_webhook_fallback_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plivo/webhook/ringing": {
+      "post": {
+        "tags": [
+          "Plivo",
+          "Plivo"
+        ],
+        "summary": "Plivo Ringing Webhook",
+        "description": "Handle call ringing event (optional).\n\nCan be used for analytics or early session setup.",
+        "operationId": "plivo_ringing_webhook_api_plivo_webhook_ringing_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Plivo Ringing Webhook Api Plivo Webhook Ringing Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plivo/health": {
+      "get": {
+        "tags": [
+          "Plivo",
+          "Plivo"
+        ],
+        "summary": "Plivo Health",
+        "description": "Check Plivo service health.\n\nVerifies:\n- Plivo API credentials are valid\n- Call registry is accessible",
+        "operationId": "plivo_health_api_plivo_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Plivo Health Api Plivo Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reservations": {
+      "get": {
+        "tags": [
+          "CRUD",
+          "Reservations"
+        ],
+        "summary": "List Reservations",
+        "description": "List reservations with optional filters.",
+        "operationId": "list_reservations_api_reservations_get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ReservationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReservationResponse"
+                  },
+                  "title": "Response List Reservations Api Reservations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "CRUD",
+          "Reservations"
+        ],
+        "summary": "Create Reservation",
+        "description": "Create a new reservation.",
+        "operationId": "create_reservation_api_reservations_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reservations/{reservation_id}": {
+      "get": {
+        "tags": [
+          "CRUD",
+          "Reservations"
+        ],
+        "summary": "Get Reservation",
+        "description": "Get a reservation by ID.",
+        "operationId": "get_reservation_api_reservations__reservation_id__get",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reservation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "CRUD",
+          "Reservations"
+        ],
+        "summary": "Update Reservation",
+        "description": "Update a reservation (partial update).",
+        "operationId": "update_reservation_api_reservations__reservation_id__patch",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reservation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "CRUD",
+          "Reservations"
+        ],
+        "summary": "Delete Reservation",
+        "description": "Delete a reservation.",
+        "operationId": "delete_reservation_api_reservations__reservation_id__delete",
+        "parameters": [
+          {
+            "name": "reservation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reservation Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/knowledge": {
+      "get": {
+        "tags": [
+          "Knowledge",
+          "Knowledge"
+        ],
+        "summary": "List Knowledge Items",
+        "description": "List knowledge items with optional filters.",
+        "operationId": "list_knowledge_items_api_knowledge_get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/KnowledgeCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeItemResponse"
+                  },
+                  "title": "Response List Knowledge Items Api Knowledge Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Knowledge",
+          "Knowledge"
+        ],
+        "summary": "Create Knowledge Item",
+        "description": "Create a new knowledge item.",
+        "operationId": "create_knowledge_item_api_knowledge_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeItemCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeItemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/knowledge/{item_id}": {
+      "get": {
+        "tags": [
+          "Knowledge",
+          "Knowledge"
+        ],
+        "summary": "Get Knowledge Item",
+        "description": "Get a knowledge item by ID.",
+        "operationId": "get_knowledge_item_api_knowledge__item_id__get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeItemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Knowledge",
+          "Knowledge"
+        ],
+        "summary": "Update Knowledge Item",
+        "description": "Update a knowledge item (partial update).",
+        "operationId": "update_knowledge_item_api_knowledge__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeItemUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeItemResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Knowledge",
+          "Knowledge"
+        ],
+        "summary": "Delete Knowledge Item",
+        "description": "Delete a knowledge item.",
+        "operationId": "delete_knowledge_item_api_knowledge__item_id__delete",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/knowledge/search": {
+      "post": {
+        "tags": [
+          "Knowledge",
+          "Knowledge"
+        ],
+        "summary": "Search Knowledge",
+        "description": "Search knowledge items using text matching.\n\nTODO: Integrate with ChromaDB for vector similarity search.\nCurrent implementation uses simple text matching.",
+        "operationId": "search_knowledge_api_knowledge_search_post",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "title": "Query"
+            }
+          },
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/KnowledgeCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 5,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeSearchResult"
+                  },
+                  "title": "Response Search Knowledge Api Knowledge Search Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/call-logs": {
+      "get": {
+        "tags": [
+          "Call Logs",
+          "Call Logs"
+        ],
+        "summary": "List Call Logs",
+        "description": "List call logs with optional filters.",
+        "operationId": "list_call_logs_api_call_logs_get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CallOutcome"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CallLogResponse"
+                  },
+                  "title": "Response List Call Logs Api Call Logs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/call-logs/summary": {
+      "get": {
+        "tags": [
+          "Call Logs",
+          "Call Logs"
+        ],
+        "summary": "Get Call Log Summary",
+        "description": "Get summary statistics for call logs.",
+        "operationId": "get_call_log_summary_api_call_logs_summary_get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Business Id"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallLogSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/call-logs/{call_log_id}": {
+      "get": {
+        "tags": [
+          "Call Logs",
+          "Call Logs"
+        ],
+        "summary": "Get Call Log",
+        "description": "Get a call log by ID.",
+        "operationId": "get_call_log_api_call_logs__call_log_id__get",
+        "parameters": [
+          {
+            "name": "call_log_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Call Log Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallLogResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/business/{business_id}": {
+      "get": {
+        "tags": [
+          "Business",
+          "business"
+        ],
+        "summary": "Get Business",
+        "description": "Get business settings by ID.",
+        "operationId": "get_business_api_business__business_id__get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Business",
+          "business"
+        ],
+        "summary": "Update Business",
+        "description": "Update business settings.",
+        "operationId": "update_business_api_business__business_id__patch",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Business Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/business": {
+      "get": {
+        "tags": [
+          "Business",
+          "business"
+        ],
+        "summary": "List Businesses",
+        "description": "List all businesses.",
+        "operationId": "list_businesses_api_business_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BusinessResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Businesses Api Business Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Metrics",
+        "description": "Prometheus metrics endpoint.\n\nExposes metrics in Prometheus text format for scraping.\n\nReturns:\n    Response with metrics in Prometheus exposition format.",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/voice/process": {
+      "post": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "Process Voice",
+        "description": "Process voice input and return response with audio.",
+        "operationId": "process_voice_api_voice_process_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_process_voice_api_voice_process_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/voice/audio/{filename}": {
+      "get": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "Get Audio",
+        "description": "Serve generated audio file.",
+        "operationId": "get_audio_api_voice_audio__filename__get",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Filename"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/voice/tts": {
+      "post": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "Text To Speech",
+        "description": "Generate TTS audio from text.",
+        "operationId": "text_to_speech_api_voice_tts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object",
+                "title": "Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/voice": {
+      "get": {
+        "summary": "Voice Ui",
+        "description": "Serve the voice testing UI.",
+        "operationId": "voice_ui_voice_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_process_voice_api_voice_process_post": {
+        "properties": {
+          "audio": {
+            "type": "string",
+            "format": "binary",
+            "title": "Audio"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "audio",
+          "session_id"
+        ],
+        "title": "Body_process_voice_api_voice_process_post"
+      },
+      "BusinessResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "$ref": "#/components/schemas/BusinessType"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BusinessStatus"
+          },
+          "phone_numbers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Phone Numbers"
+          },
+          "operating_hours": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OperatingHours"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Operating Hours"
+          },
+          "reservation_rules": {
+            "$ref": "#/components/schemas/ReservationRules"
+          },
+          "greeting_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Greeting Text"
+          },
+          "menu_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Menu Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "timezone",
+          "status",
+          "phone_numbers",
+          "operating_hours",
+          "reservation_rules",
+          "greeting_text",
+          "menu_summary"
+        ],
+        "title": "BusinessResponse",
+        "description": "Business settings response."
+      },
+      "BusinessStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "suspended",
+          "onboarding"
+        ],
+        "title": "BusinessStatus",
+        "description": "Business account status."
+      },
+      "BusinessType": {
+        "type": "string",
+        "enum": [
+          "restaurant",
+          "clinic",
+          "salon",
+          "other"
+        ],
+        "title": "BusinessType",
+        "description": "Type of business."
+      },
+      "BusinessUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          },
+          "phone_numbers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Numbers"
+          },
+          "operating_hours": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/OperatingHours"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operating Hours"
+          },
+          "reservation_rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReservationRules"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "greeting_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Greeting Text"
+          },
+          "menu_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Menu Summary"
+          }
+        },
+        "type": "object",
+        "title": "BusinessUpdate",
+        "description": "Business settings update request."
+      },
+      "CallLogResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "business_id": {
+            "type": "string",
+            "title": "Business Id"
+          },
+          "caller_id_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caller Id Hash"
+          },
+          "call_start": {
+            "type": "string",
+            "title": "Call Start"
+          },
+          "call_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call End"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "detected_language": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetectedLanguage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transcript": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcript"
+          },
+          "extracted_info": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extracted Info"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consent_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsentType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "business_id",
+          "caller_id_hash",
+          "call_start",
+          "call_end",
+          "duration_seconds",
+          "detected_language",
+          "transcript",
+          "extracted_info",
+          "outcome",
+          "consent_type",
+          "created_at"
+        ],
+        "title": "CallLogResponse",
+        "description": "Response schema for call logs."
+      },
+      "CallLogSummary": {
+        "properties": {
+          "total_calls": {
+            "type": "integer",
+            "title": "Total Calls"
+          },
+          "total_duration_seconds": {
+            "type": "integer",
+            "title": "Total Duration Seconds"
+          },
+          "avg_duration_seconds": {
+            "type": "number",
+            "title": "Avg Duration Seconds"
+          },
+          "calls_by_outcome": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Calls By Outcome"
+          },
+          "calls_by_language": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Calls By Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_calls",
+          "total_duration_seconds",
+          "avg_duration_seconds",
+          "calls_by_outcome",
+          "calls_by_language"
+        ],
+        "title": "CallLogSummary",
+        "description": "Summary stats for call logs."
+      },
+      "CallOutcome": {
+        "type": "string",
+        "enum": [
+          "resolved",
+          "fallback",
+          "dropped",
+          "error",
+          "privacy_opt_out"
+        ],
+        "title": "CallOutcome",
+        "description": "How a call ended."
+      },
+      "ConsentType": {
+        "type": "string",
+        "enum": [
+          "none",
+          "transcript",
+          "whatsapp"
+        ],
+        "title": "ConsentType",
+        "description": "Level of consent given by caller."
+      },
+      "DetailedHealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "checks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Checks"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "checks",
+          "version"
+        ],
+        "title": "DetailedHealthResponse",
+        "description": "Detailed health check response."
+      },
+      "DetectedLanguage": {
+        "type": "string",
+        "enum": [
+          "hindi",
+          "english",
+          "hinglish"
+        ],
+        "title": "DetectedLanguage",
+        "description": "Detected language during call."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "description": "Basic health check response."
+      },
+      "KnowledgeCategory": {
+        "type": "string",
+        "enum": [
+          "menu_item",
+          "faq",
+          "policy",
+          "announcement"
+        ],
+        "title": "KnowledgeCategory",
+        "description": "Category of knowledge item."
+      },
+      "KnowledgeItemCreate": {
+        "properties": {
+          "business_id": {
+            "type": "string",
+            "title": "Business Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/KnowledgeCategory"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title"
+          },
+          "title_hindi": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Hindi"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Content"
+          },
+          "content_hindi": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hindi"
+          },
+          "metadata_json": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Json"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          },
+          "priority": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Priority",
+            "default": 50
+          }
+        },
+        "type": "object",
+        "required": [
+          "business_id",
+          "category",
+          "title",
+          "content"
+        ],
+        "title": "KnowledgeItemCreate",
+        "description": "Schema for creating a knowledge item."
+      },
+      "KnowledgeItemResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "business_id": {
+            "type": "string",
+            "title": "Business Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/KnowledgeCategory"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "title_hindi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Hindi"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "content_hindi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hindi"
+          },
+          "metadata_json": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Json"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "embedding_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "business_id",
+          "category",
+          "title",
+          "title_hindi",
+          "content",
+          "content_hindi",
+          "metadata_json",
+          "is_active",
+          "priority",
+          "embedding_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "KnowledgeItemResponse",
+        "description": "Response schema for knowledge items."
+      },
+      "KnowledgeItemUpdate": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KnowledgeCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "title_hindi": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Hindi"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "content_hindi": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Hindi"
+          },
+          "metadata_json": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Json"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          }
+        },
+        "type": "object",
+        "title": "KnowledgeItemUpdate",
+        "description": "Schema for updating a knowledge item (all fields optional)."
+      },
+      "KnowledgeSearchResult": {
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/KnowledgeItemResponse"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item",
+          "score"
+        ],
+        "title": "KnowledgeSearchResult",
+        "description": "Search result with similarity score."
+      },
+      "OperatingHours": {
+        "properties": {
+          "open": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open",
+            "description": "Opening time (HH:MM) or null if closed"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close",
+            "description": "Closing time (HH:MM) or null if closed"
+          }
+        },
+        "type": "object",
+        "title": "OperatingHours",
+        "description": "Operating hours for a single day."
+      },
+      "ReservationCreate": {
+        "properties": {
+          "business_id": {
+            "type": "string",
+            "title": "Business Id"
+          },
+          "call_log_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Log Id"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "customer_phone_encrypted": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Phone Encrypted"
+          },
+          "party_size": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Party Size"
+          },
+          "reservation_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Reservation Date"
+          },
+          "reservation_time": {
+            "type": "string",
+            "pattern": "^([01]?[0-9]|2[0-3]):[0-5][0-9]$",
+            "title": "Reservation Time"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "whatsapp_consent": {
+            "type": "boolean",
+            "title": "Whatsapp Consent",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "business_id",
+          "party_size",
+          "reservation_date",
+          "reservation_time"
+        ],
+        "title": "ReservationCreate",
+        "description": "Schema for creating a reservation."
+      },
+      "ReservationResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "business_id": {
+            "type": "string",
+            "title": "Business Id"
+          },
+          "call_log_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Log Id"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "party_size": {
+            "type": "integer",
+            "title": "Party Size"
+          },
+          "reservation_date": {
+            "type": "string",
+            "title": "Reservation Date"
+          },
+          "reservation_time": {
+            "type": "string",
+            "title": "Reservation Time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReservationStatus"
+          },
+          "whatsapp_sent": {
+            "type": "boolean",
+            "title": "Whatsapp Sent"
+          },
+          "whatsapp_consent": {
+            "type": "boolean",
+            "title": "Whatsapp Consent"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "business_id",
+          "call_log_id",
+          "customer_name",
+          "party_size",
+          "reservation_date",
+          "reservation_time",
+          "status",
+          "whatsapp_sent",
+          "whatsapp_consent",
+          "notes",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReservationResponse",
+        "description": "Response schema for reservations."
+      },
+      "ReservationRules": {
+        "properties": {
+          "min_party_size": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Min Party Size",
+            "default": 1
+          },
+          "max_party_size": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Max Party Size",
+            "default": 10
+          },
+          "max_phone_party_size": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Max Phone Party Size",
+            "description": "Max party size bookable by phone (larger \u2192 WhatsApp)",
+            "default": 10
+          },
+          "total_seats": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Total Seats",
+            "default": 40
+          },
+          "advance_days": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Advance Days",
+            "description": "How many days ahead can book",
+            "default": 30
+          },
+          "slot_duration_minutes": {
+            "type": "integer",
+            "minimum": 15.0,
+            "title": "Slot Duration Minutes",
+            "default": 90
+          }
+        },
+        "type": "object",
+        "title": "ReservationRules",
+        "description": "Reservation rules for the business."
+      },
+      "ReservationStatus": {
+        "type": "string",
+        "enum": [
+          "confirmed",
+          "cancelled",
+          "completed",
+          "no_show"
+        ],
+        "title": "ReservationStatus",
+        "description": "Status of a reservation."
+      },
+      "ReservationUpdate": {
+        "properties": {
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "party_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Party Size"
+          },
+          "reservation_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Date"
+          },
+          "reservation_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reservation Time"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReservationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "whatsapp_sent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Sent"
+          }
+        },
+        "type": "object",
+        "title": "ReservationUpdate",
+        "description": "Schema for updating a reservation (all fields optional)."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
