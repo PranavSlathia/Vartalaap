@@ -4,22 +4,24 @@
 Uses:
 - Deepgram for speech-to-text
 - Groq LLM for conversation
-- Piper TTS for voice responses (local, self-hosted)
+- gTTS for voice responses (Google TTS)
 """
 
 import asyncio
 import os
 import sys
+import tempfile
 
 import numpy as np
 import sounddevice as sd
+from gtts import gTTS
+from pydub import AudioSegment
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.core.session import CallSession
 from src.services.stt.deepgram import DeepgramService
-from src.services.tts.piper import PiperTTSService
 
 
 # Audio settings
@@ -29,8 +31,8 @@ CHUNK_DURATION = 0.1  # 100ms chunks
 SILENCE_THRESHOLD = 300  # Lower threshold for better detection
 SILENCE_DURATION = 1.2  # Seconds of silence before processing
 
-# Piper outputs 22050Hz, we'll play at that rate
-PIPER_SAMPLE_RATE = 22050
+# TTS playback rate
+TTS_SAMPLE_RATE = 24000
 
 
 def get_input_device():
@@ -56,41 +58,31 @@ def calculate_rms(audio_data: np.ndarray) -> float:
     return float(np.sqrt(np.mean(audio_data.astype(np.float32) ** 2)))
 
 
-async def speak_text_piper(tts: PiperTTSService, text: str) -> None:
-    """Convert text to speech using Piper and play it."""
+def speak_text_gtts(text: str, lang: str = 'hi') -> None:
+    """Convert text to speech using gTTS and play it."""
     try:
-        # Synthesize at native Piper rate (22050Hz) for best quality
-        generator, metadata = await tts.synthesize_stream(
-            text,
-            target_sample_rate=PIPER_SAMPLE_RATE,
-            chunk_size_ms=200,
-        )
+        # Generate speech with gTTS
+        tts = gTTS(text=text, lang=lang, slow=False)
 
-        # Collect all audio chunks
-        audio_chunks = []
-        async for chunk in generator:
-            audio_chunks.append(chunk.audio_bytes)
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+            temp_path = f.name
+            tts.save(temp_path)
 
-        if not audio_chunks:
-            print("    (TTS: no audio generated)")
-            return
+        # Load and convert to playable format
+        audio = AudioSegment.from_mp3(temp_path)
+        audio = audio.set_frame_rate(TTS_SAMPLE_RATE).set_channels(1)
 
-        # Combine all chunks
-        audio_bytes = b"".join(audio_chunks)
+        # Convert to numpy array
+        samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+        samples = samples / 32768.0  # Normalize
 
-        # Convert to numpy array (16-bit PCM)
-        audio = np.frombuffer(audio_bytes, dtype=np.int16)
-
-        # Normalize to float32 for playback
-        audio_float = audio.astype(np.float32) / 32768.0
-
-        # Play audio
-        sd.play(audio_float, samplerate=PIPER_SAMPLE_RATE)
+        # Play
+        sd.play(samples, samplerate=TTS_SAMPLE_RATE)
         sd.wait()
 
-        # Show latency
-        if metadata.first_byte_ms:
-            print(f"    [TTS: {metadata.first_byte_ms:.0f}ms to first byte]")
+        # Cleanup
+        os.unlink(temp_path)
 
     except Exception as e:
         print(f"    (TTS error: {e})")
@@ -176,9 +168,10 @@ async def transcribe_audio(stt: DeepgramService, audio_data: bytes) -> str:
 
 async def main():
     print("=" * 60)
-    print("  Vartalaap Voice Bot - Local Voice Test (Piper TTS)")
+    print("  Vartalaap Voice Bot - Full Voice Test")
     print("=" * 60)
-    print("\n  Speak in Hindi or English. Press Ctrl+C to exit.\n")
+    print("\n  Pipeline: Mic → Deepgram STT → Groq LLM → gTTS")
+    print("  Speak in Hindi or English. Press Ctrl+C to exit.\n")
 
     # Find microphone
     device_id = get_input_device()
@@ -192,38 +185,24 @@ async def main():
 
     # Initialize services
     stt = DeepgramService()
-    tts = PiperTTSService()
     session = CallSession(business_id="himalayan_kitchen")
 
     # Check STT
     print("  Checking Deepgram... ", end="", flush=True)
     if not await stt.health_check():
         print("FAILED")
-        print("ERROR: Deepgram not available. Check DEEPGRAM_API_KEY.")
+        print("ERROR: Deepgram not available. Check DEEPGRAM_API_KEY in .env")
         return
     print("OK")
 
-    # Check TTS
-    print("  Checking Piper TTS... ", end="", flush=True)
-    try:
-        if not await tts.health_check():
-            print("FAILED")
-            print("ERROR: Piper model not found at data/models/piper/")
-            print("       Download from: https://huggingface.co/rhasspy/piper-voices")
-            return
-        print("OK")
-    except Exception as e:
-        print(f"FAILED ({e})")
-        return
-
-    print(f"  Piper Voice: {tts._voice_name}")
+    print("  TTS: Google TTS (gTTS)")
     print()
     print("-" * 60)
 
     # Initial greeting
     greeting = "Namaste! Himalayan Kitchen mein aapka swagat hai. Main aapki kya madad kar sakti hoon?"
     print(f"\nBot: {greeting}")
-    await speak_text_piper(tts, greeting)
+    speak_text_gtts(greeting, lang='hi')
     print()
 
     try:
@@ -241,22 +220,21 @@ async def main():
 
             print(f"You: {transcript}")
 
-            # Get response
+            # Get response from LLM
             response, metadata = await session.process_user_input(transcript)
 
             print(f"Bot: {response}")
             if metadata.first_token_ms:
                 print(f"    [LLM: {metadata.first_token_ms:.0f}ms]")
 
-            # Speak response using Piper
-            await speak_text_piper(tts, response)
+            # Speak response using gTTS
+            speak_text_gtts(response, lang='hi')
             print()
 
     except KeyboardInterrupt:
         print("\n\nGoodbye!")
     finally:
         await stt.close()
-        await tts.close()
         await session.close()
 
 

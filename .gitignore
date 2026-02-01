@@ -4,17 +4,43 @@ __pycache__/
 *.pyo
 *.pyd
 .venv/
+venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.egg-info/
+dist/
+build/
 
-# Env
+# Environment & Secrets
 .env
 .env.*
+!.env.example
+*.pem
+*.key
+secrets/
 
-# Data/logs
+# SSL Certificates
+certs/
+
+# Data & Logs
 /data/
 /logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml

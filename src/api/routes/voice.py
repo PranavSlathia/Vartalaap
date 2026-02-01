@@ -194,3 +194,14 @@ async def get_audio(filename: str):
         media_type="audio/mpeg",
         filename=filename,
     )
+
+
+@router.post("/voice/tts")
+async def text_to_speech(request: dict):
+    """Generate TTS audio from text."""
+    text = request.get("text", "")
+    if not text:
+        return JSONResponse({"error": "No text provided"}, status_code=400)
+
+    audio_url = generate_tts(text)
+    return JSONResponse({"audio_url": audio_url})
