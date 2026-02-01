@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.auth import RequireBusinessAccess
+from src.api.auth import RequireAuth, RequireBusinessAccess
 from src.config import get_settings
 from src.db.models import (
     CallLog,
@@ -414,6 +414,7 @@ async def update_suggestion(
     suggestion_id: str,
     request: UpdateSuggestionRequest,
     auth_business_id: RequireBusinessAccess,
+    current_user: RequireAuth,
     session: AsyncSession = Depends(get_session),
 ) -> ImprovementSuggestionResponse:
     """Update the status of an improvement suggestion.
@@ -443,7 +444,7 @@ async def update_suggestion(
 
     if request.status == SuggestionStatus.implemented:
         suggestion.implemented_at = datetime.now(UTC)
-        suggestion.implemented_by = "admin"  # TODO: Get from JWT
+        suggestion.implemented_by = current_user.email or current_user.preferred_username or current_user.sub
     elif request.status == SuggestionStatus.rejected:
         suggestion.rejection_reason = request.rejection_reason
 
