@@ -1,4 +1,8 @@
-"""Piper TTS service implementation for offline speech synthesis."""
+"""Piper TTS service implementation for offline speech synthesis.
+
+Uses sherpa-onnx for inference, which provides better cross-platform
+compatibility than the piper-tts package.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +19,7 @@ from src.services.tts.protocol import AudioChunk, SynthesisMetadata
 from src.services.tts.resampler import AudioResampler
 
 if TYPE_CHECKING:
-    pass
+    import sherpa_onnx
 
 logger: Any = get_logger(__name__)
 
@@ -27,12 +31,13 @@ PIPER_SAMPLE_RATE = 22050  # Piper outputs 22050Hz
 class PiperTTSService:
     """Piper TTS service for offline, self-hosted speech synthesis.
 
-    Optimized for:
-    - Hindi voice output (hi_IN-female)
+    Uses sherpa-onnx for inference, providing:
+    - Hindi voice output (hi_IN-priyamvada)
     - Low latency streaming
     - CPU-friendly inference
     - Resampling to telephony rates (8kHz)
     - Cancellation for barge-in support
+    - Better cross-platform compatibility (macOS ARM64, Linux, etc.)
     """
 
     def __init__(
@@ -53,51 +58,89 @@ class PiperTTSService:
             # Default to data/models/piper/{voice_name}.onnx
             self._model_path = Path("data/models/piper") / f"{self._voice_name}.onnx"
 
-        self._voice: Any = None
+        # Derived paths
+        self._tokens_path = self._model_path.parent / "tokens.txt"
+        self._espeak_data_dir = Path("data/models/espeak-ng-data")
+
+        self._tts: sherpa_onnx.OfflineTts | None = None
         self._resampler: AudioResampler | None = None
         self._load_lock = asyncio.Lock()
         self._cancel_event: asyncio.Event | None = None
 
     @property
-    def voice(self) -> Any:
-        """Lazy initialization of Piper voice model.
+    def tts(self) -> Any:
+        """Lazy initialization of sherpa-onnx TTS.
 
-        Note: For async contexts, use _ensure_voice_loaded() instead
+        Note: For async contexts, use _ensure_tts_loaded() instead
         to properly handle concurrent loading.
         """
-        if self._voice is None:
-            self._load_voice_sync()
-        return self._voice
+        if self._tts is None:
+            self._load_tts_sync()
+        return self._tts
 
-    def _load_voice_sync(self) -> None:
-        """Synchronous voice loading (for non-async contexts)."""
+    def _load_tts_sync(self) -> None:
+        """Synchronous TTS loading (for non-async contexts)."""
         try:
-            from piper import PiperVoice
+            import sherpa_onnx
         except ImportError as e:
             raise TTSModelNotFoundError(
-                f"piper-tts not installed: {e}"
+                f"sherpa-onnx not installed: {e}"
             ) from e
 
         if not self._model_path.exists():
             raise TTSModelNotFoundError(str(self._model_path))
 
-        logger.info(f"Loading Piper model: {self._model_path}")
-        self._voice = PiperVoice.load(str(self._model_path))
-        logger.info(f"Piper model loaded: {self._voice_name}")
+        if not self._tokens_path.exists():
+            raise TTSModelNotFoundError(
+                f"Tokens file not found: {self._tokens_path}. "
+                "Generate it from the model's .onnx.json file."
+            )
 
-    async def _ensure_voice_loaded(self) -> Any:
-        """Ensure voice is loaded with async lock to prevent double-loading."""
-        if self._voice is not None:
-            return self._voice
+        if not self._espeak_data_dir.exists():
+            raise TTSModelNotFoundError(
+                f"espeak-ng-data not found: {self._espeak_data_dir}. "
+                "Download from: https://github.com/k2-fsa/sherpa-onnx/releases"
+            )
+
+        logger.info(f"Loading Piper model via sherpa-onnx: {self._model_path}")
+
+        # Configure VITS model (Piper uses VITS architecture)
+        vits_config = sherpa_onnx.OfflineTtsVitsModelConfig(
+            model=str(self._model_path),
+            tokens=str(self._tokens_path),
+            data_dir=str(self._espeak_data_dir),
+            length_scale=1.0,  # Speed (1.0 = normal)
+            noise_scale=0.667,  # From model config
+            noise_scale_w=0.8,  # From model config
+        )
+
+        model_config = sherpa_onnx.OfflineTtsModelConfig(
+            vits=vits_config,
+            num_threads=2,  # CPU threads
+            debug=False,
+        )
+
+        tts_config = sherpa_onnx.OfflineTtsConfig(
+            model=model_config,
+            max_num_sentences=1,  # Process one sentence at a time for lower latency
+        )
+
+        self._tts = sherpa_onnx.OfflineTts(tts_config)
+        logger.info(f"Piper model loaded via sherpa-onnx: {self._voice_name}")
+
+    async def _ensure_tts_loaded(self) -> Any:
+        """Ensure TTS is loaded with async lock to prevent double-loading."""
+        if self._tts is not None:
+            return self._tts
 
         async with self._load_lock:
             # Double-check after acquiring lock
-            if self._voice is not None:
-                return self._voice
+            if self._tts is not None:
+                return self._tts
 
             # Load in thread pool to avoid blocking
-            await asyncio.to_thread(self._load_voice_sync)
-            return self._voice
+            await asyncio.to_thread(self._load_tts_sync)
+            return self._tts
 
     def _get_resampler(self, target_rate: int) -> AudioResampler:
         """Get or create resampler for target rate."""
@@ -117,7 +160,7 @@ class PiperTTSService:
     ) -> tuple[AsyncGenerator[AudioChunk, None], SynthesisMetadata]:
         """Synthesize text to streaming audio chunks.
 
-        Piper synthesizes the complete audio, which we then chunk
+        sherpa-onnx synthesizes the complete audio, which we then chunk
         and resample for streaming output.
         """
         if target_sample_rate is None:
@@ -159,10 +202,10 @@ class PiperTTSService:
         target_chunk_bytes = int(chunk_size_ms * bytes_per_ms)
 
         try:
-            # Ensure voice is loaded with async lock
-            await self._ensure_voice_loaded()
+            # Ensure TTS is loaded with async lock
+            await self._ensure_tts_loaded()
 
-            # Piper synthesize is synchronous, run in thread pool
+            # sherpa-onnx synthesize is synchronous, run in thread pool
             raw_audio = await asyncio.to_thread(
                 self._synthesize_to_bytes, text
             )
@@ -231,20 +274,24 @@ class PiperTTSService:
         """Synthesize text to raw PCM bytes (synchronous)."""
         import numpy as np
 
-        # Get the voice (may trigger lazy load)
-        voice = self.voice
+        # Get the TTS instance (may trigger lazy load)
+        tts = self.tts
 
-        # Piper's synthesize_stream_raw yields numpy int16 arrays
-        audio_chunks = []
-        for audio_array in voice.synthesize_stream_raw(text):
-            audio_chunks.append(audio_array)
+        # sherpa-onnx generate returns an object with samples (float32 array)
+        # and sample_rate
+        audio = tts.generate(text, sid=0, speed=1.0)
 
-        if not audio_chunks:
-            return b""
+        if audio.sample_rate != PIPER_SAMPLE_RATE:
+            logger.warning(
+                f"Unexpected sample rate: {audio.sample_rate} vs expected {PIPER_SAMPLE_RATE}"
+            )
 
-        # Concatenate all chunks
-        full_audio = np.concatenate(audio_chunks)
-        return bytes(full_audio.tobytes())
+        # Convert float32 samples to int16 PCM bytes
+        samples = np.array(audio.samples)
+        # Normalize and convert to int16
+        samples_int16 = (samples * 32767).astype(np.int16)
+
+        return samples_int16.tobytes()
 
     def cancel(self) -> None:
         """Cancel ongoing synthesis (for barge-in support)."""
@@ -276,8 +323,7 @@ class PiperTTSService:
         """Release model resources."""
         if self._resampler:
             self._resampler = None
-        # Note: PiperVoice doesn't have explicit close
-        self._voice = None
+        self._tts = None
         self._cancel_event = None
 
     async def health_check(self) -> bool:
@@ -287,8 +333,14 @@ class PiperTTSService:
             if not self._model_path.exists():
                 logger.warning(f"Piper model not found: {self._model_path}")
                 return False
+            if not self._tokens_path.exists():
+                logger.warning(f"Tokens file not found: {self._tokens_path}")
+                return False
+            if not self._espeak_data_dir.exists():
+                logger.warning(f"espeak-ng-data not found: {self._espeak_data_dir}")
+                return False
             # Try to load the model with async lock
-            await self._ensure_voice_loaded()
+            await self._ensure_tts_loaded()
             return True
         except Exception as e:
             logger.warning(f"Piper health check failed: {e}")
@@ -299,10 +351,12 @@ class PiperTTSService:
         if not self._model_path.exists():
             raise TTSModelNotFoundError(str(self._model_path))
 
-        # Check for accompanying .json config file
-        config_path = self._model_path.with_suffix(".onnx.json")
-        if not config_path.exists():
-            logger.warning(
-                f"Piper model config not found: {config_path}. "
-                "Model may fail to load."
+        if not self._tokens_path.exists():
+            raise TTSModelNotFoundError(
+                f"Tokens file not found: {self._tokens_path}"
+            )
+
+        if not self._espeak_data_dir.exists():
+            raise TTSModelNotFoundError(
+                f"espeak-ng-data not found: {self._espeak_data_dir}"
             )
