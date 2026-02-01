@@ -59,7 +59,7 @@ async def detailed_health_check(
 
     # Database check
     try:
-        await session.exec(text("SELECT 1"))
+        await session.execute(text("SELECT 1"))
         checks["database"] = "ok"
     except Exception as e:
         checks["database"] = f"error: {type(e).__name__}"

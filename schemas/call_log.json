@@ -2,19 +2,58 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "CallLog",
   "type": "object",
-  "required": ["business_id", "call_start", "outcome"],
+  "required": ["business_id"],
   "properties": {
-    "id": {"type": "string"},
-    "business_id": {"type": "string"},
-    "caller_id_hash": {"type": "string"},
-    "call_start": {"type": "string", "format": "date-time"},
-    "call_end": {"type": "string", "format": "date-time"},
-    "duration_seconds": {"type": "integer"},
-    "detected_language": {"type": "string"},
-    "transcript": {"type": "string"},
-    "extracted_info": {"type": "string"},
-    "outcome": {"type": "string"},
-    "consent_type": {"type": "string"},
-    "created_at": {"type": "string", "format": "date-time"}
+    "id": {
+      "type": "string",
+      "description": "Unique identifier (UUID)"
+    },
+    "business_id": {
+      "type": "string",
+      "description": "Business that received this call"
+    },
+    "caller_id_hash": {
+      "type": "string",
+      "description": "HMAC-SHA256 hash of caller phone"
+    },
+    "call_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When call started (set on creation)"
+    },
+    "call_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When call ended"
+    },
+    "duration_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "detected_language": {
+      "type": "string",
+      "enum": ["hindi", "english", "hinglish"]
+    },
+    "transcript": {
+      "type": "string",
+      "description": "JSON string of conversation turns"
+    },
+    "extracted_info": {
+      "type": "string",
+      "description": "JSON string of extracted entities"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["resolved", "fallback", "dropped", "error", "privacy_opt_out"],
+      "description": "How the call ended (set when call completes)"
+    },
+    "consent_type": {
+      "type": "string",
+      "enum": ["none", "transcript", "whatsapp"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
   }
 }

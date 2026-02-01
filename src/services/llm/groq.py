@@ -1,1 +1,271 @@
-# Groq LLM integration placeholder.
+"""Groq LLM service implementation with streaming support."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any
+
+import groq
+from groq import AsyncGroq
+
+from src.config import Settings, get_settings
+from src.logging_config import get_logger
+from src.services.llm.exceptions import (
+    LLMAuthenticationError,
+    LLMConnectionError,
+    LLMRateLimitError,
+    LLMServiceError,
+)
+from src.services.llm.protocol import (
+    ConversationContext,
+    Message,
+    StreamMetadata,
+)
+from src.services.llm.rate_limiter import TokenBucketRateLimiter
+from src.services.llm.token_counter import estimate_llama_tokens
+
+if TYPE_CHECKING:
+    pass
+
+logger: Any = get_logger(__name__)
+
+# Groq free tier limits
+GROQ_FREE_TIER_TPM = 6000  # Tokens per minute
+GROQ_FREE_TIER_RPM = 30  # Requests per minute
+
+
+class GroqService:
+    """Groq LLM service with async streaming and rate limiting."""
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        model: str = "llama-3.3-70b-versatile",
+    ) -> None:
+        self._settings = settings or get_settings()
+        self._model = model
+        self._client: AsyncGroq | None = None
+        self._rate_limiter = TokenBucketRateLimiter(
+            tokens_per_minute=GROQ_FREE_TIER_TPM,
+            requests_per_minute=GROQ_FREE_TIER_RPM,
+        )
+
+    @property
+    def client(self) -> AsyncGroq:
+        """Lazy initialization of AsyncGroq client."""
+        if self._client is None:
+            self._client = AsyncGroq(
+                api_key=self._settings.groq_api_key.get_secret_value(),
+                timeout=30.0,
+                max_retries=2,
+            )
+        return self._client
+
+    async def stream_chat(
+        self,
+        messages: list[Message],
+        context: ConversationContext,
+        *,
+        max_tokens: int = 256,
+        temperature: float = 0.7,
+    ) -> tuple[AsyncGenerator[str, None], StreamMetadata]:
+        """Stream chat completion with context injection.
+
+        Args:
+            messages: Conversation history
+            context: Business context for system prompt
+            max_tokens: Maximum response tokens (keep low for voice)
+            temperature: Response creativity (0.7 good for conversation)
+
+        Returns:
+            Tuple of (async content generator, metadata object)
+
+        Raises:
+            LLMRateLimitError: When rate limit exceeded
+            LLMConnectionError: When API unreachable
+            LLMAuthenticationError: When API key invalid
+            LLMServiceError: For other API errors
+        """
+        # Build messages with system prompt
+        system_prompt = self._build_system_prompt(context)
+        api_messages = self._format_messages(system_prompt, messages)
+
+        # Estimate tokens for rate limiting
+        estimated_input_tokens = sum(self.estimate_tokens(m["content"]) for m in api_messages)
+        estimated_total = estimated_input_tokens + max_tokens
+
+        # Check rate limit before making request
+        await self._rate_limiter.acquire(estimated_total)
+
+        # Create metadata container (populated during streaming)
+        metadata = StreamMetadata(model=self._model)
+
+        # Create and return the generator
+        generator = self._stream_with_metadata(api_messages, max_tokens, temperature, metadata)
+
+        return generator, metadata
+
+    async def _stream_with_metadata(
+        self,
+        api_messages: list[dict],
+        max_tokens: int,
+        temperature: float,
+        metadata: StreamMetadata,
+    ) -> AsyncGenerator[str, None]:
+        """Internal generator that populates metadata during streaming."""
+        start_time = time.perf_counter()
+        first_token_received = False
+
+        try:
+            stream = await self.client.chat.completions.create(
+                messages=api_messages,  # type: ignore[arg-type]
+                model=self._model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+            )
+
+            async for chunk in stream:  # type: ignore[union-attr]
+                pass  # chunk is ChatCompletionChunk
+
+                # Track first token latency
+                if not first_token_received:
+                    metadata.first_token_ms = (time.perf_counter() - start_time) * 1000
+                    first_token_received = True
+                    logger.debug(f"First token latency: {metadata.first_token_ms:.1f}ms")
+
+                # Extract content
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+
+                # Capture finish reason
+                if chunk.choices and chunk.choices[0].finish_reason:
+                    metadata.finish_reason = chunk.choices[0].finish_reason
+
+                # Groq provides usage in x_groq extension
+                if (
+                    hasattr(chunk, "x_groq")
+                    and chunk.x_groq
+                    and hasattr(chunk.x_groq, "usage")
+                    and chunk.x_groq.usage
+                ):
+                    usage = chunk.x_groq.usage
+                    metadata.prompt_tokens = usage.prompt_tokens
+                    metadata.completion_tokens = usage.completion_tokens
+                    metadata.total_tokens = usage.total_tokens
+
+                    # Update rate limiter with actual usage
+                    self._rate_limiter.record_usage(usage.total_tokens)
+
+        except groq.RateLimitError as e:
+            logger.warning(f"Groq rate limit hit: {e}")
+            raise LLMRateLimitError(
+                "Rate limit exceeded",
+                retry_after=self._extract_retry_after(e),
+            ) from e
+
+        except groq.APIConnectionError as e:
+            logger.error(f"Groq connection error: {e.__cause__}")
+            raise LLMConnectionError("Failed to connect to Groq API") from e
+
+        except groq.AuthenticationError as e:
+            logger.error("Groq authentication failed")
+            raise LLMAuthenticationError("Invalid Groq API key") from e
+
+        except groq.APIStatusError as e:
+            logger.error(f"Groq API error: {e.status_code} - {e.message}")
+            raise LLMServiceError(f"Groq API error: {e.status_code}") from e
+
+    def _build_system_prompt(self, context: ConversationContext) -> str:
+        """Build system prompt with injected context."""
+        # Format operating hours
+        hours_lines = []
+        for day, hours in context.operating_hours.items():
+            hours_lines.append(f"  - {day.capitalize()}: {hours}")
+        hours_text = "\n".join(hours_lines)
+
+        # Format current datetime
+        dt_text = context.current_datetime.strftime("%A, %B %d, %Y at %I:%M %p")
+
+        prompt = f"""You are a friendly voice assistant for {context.business_name}.
+
+## Current Information
+- Current date/time: {dt_text} ({context.timezone})
+- Business type: {context.business_type}
+
+## Operating Hours
+{hours_text}
+
+## Reservation Rules
+- Minimum party size: {context.reservation_rules.get('min_party_size', 1)}
+- Maximum party size (phone): {context.reservation_rules.get('max_phone_party_size', 10)} people
+- Total capacity: {context.reservation_rules.get('total_seats', 40)} seats
+"""
+
+        if context.current_capacity is not None:
+            prompt += f"- Current available seats: {context.current_capacity}\n"
+
+        if context.menu_summary:
+            prompt += f"\n## Menu Highlights\n{context.menu_summary}\n"
+
+        if context.caller_history:
+            prompt += f"\n## Caller History\n{context.caller_history}\n"
+
+        prompt += """
+## Guidelines
+- Be concise - responses should be 1-2 sentences for voice
+- Use natural, conversational language
+- Adapt to Hindi, English, or Hinglish based on caller's language
+- Always confirm reservation details before finalizing
+- Do not accept delivery orders - politely redirect
+- If unsure about availability, offer to check and call back
+"""
+
+        return prompt
+
+    def _format_messages(self, system_prompt: str, messages: list[Message]) -> list[dict]:
+        """Format messages for Groq API."""
+        api_messages = [{"role": "system", "content": system_prompt}]
+
+        for msg in messages:
+            api_messages.append({
+                "role": msg.role.value,
+                "content": msg.content,
+            })
+
+        return api_messages
+
+    def estimate_tokens(self, text: str) -> int:
+        """Estimate token count for rate limiting."""
+        return estimate_llama_tokens(text)
+
+    def _extract_retry_after(self, error: groq.RateLimitError) -> float:
+        """Extract retry-after from rate limit error."""
+        if hasattr(error, "response") and error.response:
+            retry_after = error.response.headers.get("retry-after")
+            if retry_after:
+                try:
+                    return float(retry_after)
+                except ValueError:
+                    pass
+        return 60.0  # Default to 60 seconds
+
+    async def health_check(self) -> bool:
+        """Check if Groq API is reachable."""
+        try:
+            response = await self.client.chat.completions.create(
+                messages=[{"role": "user", "content": "hi"}],
+                model=self._model,
+                max_tokens=1,
+            )
+            return bool(response.choices)
+        except Exception as e:
+            logger.warning(f"Groq health check failed: {e}")
+            return False
+
+    async def close(self) -> None:
+        """Close the client connection."""
+        if self._client:
+            await self._client.close()
+            self._client = None

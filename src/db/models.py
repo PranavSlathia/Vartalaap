@@ -9,13 +9,11 @@ These models extend the generated Pydantic schemas and add:
 DO NOT add validation here - that belongs in the JSON Schema.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 from uuid import uuid4
 
 from sqlmodel import Field, SQLModel
-
 
 # =============================================================================
 # Enums (shared across models)
@@ -104,24 +102,26 @@ class CallLog(SQLModel, table=True):
         description="Unique identifier",
     )
     business_id: str = Field(index=True, description="Business that received this call")
-    caller_id_hash: Optional[str] = Field(
+    caller_id_hash: str | None = Field(
         default=None,
         index=True,
         description="HMAC-SHA256 hash of caller phone for deduplication",
     )
-    call_start: Optional[datetime] = Field(default=None, description="When call started")
-    call_end: Optional[datetime] = Field(default=None, description="When call ended")
-    duration_seconds: Optional[int] = Field(default=None, ge=0)
-    detected_language: Optional[DetectedLanguage] = Field(default=None)
-    transcript: Optional[str] = Field(
+    call_start: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="When call started"
+    )
+    call_end: datetime | None = Field(default=None, description="When call ended")
+    duration_seconds: int | None = Field(default=None, ge=0)
+    detected_language: DetectedLanguage | None = Field(default=None)
+    transcript: str | None = Field(
         default=None, description="JSON string of conversation turns"
     )
-    extracted_info: Optional[str] = Field(
+    extracted_info: str | None = Field(
         default=None, description="JSON string of extracted entities"
     )
-    outcome: Optional[CallOutcome] = Field(default=None)
-    consent_type: Optional[ConsentType] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    outcome: CallOutcome | None = Field(default=None)
+    consent_type: ConsentType | None = Field(default=None)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
 
 
 class Reservation(SQLModel, table=True):
@@ -135,13 +135,13 @@ class Reservation(SQLModel, table=True):
         description="Unique identifier",
     )
     business_id: str = Field(index=True, description="Business this reservation belongs to")
-    call_log_id: Optional[str] = Field(
+    call_log_id: str | None = Field(
         default=None,
         foreign_key="call_logs.id",
         description="Associated call log",
     )
-    customer_name: Optional[str] = Field(default=None, max_length=100)
-    customer_phone_encrypted: Optional[str] = Field(
+    customer_name: str | None = Field(default=None, max_length=100)
+    customer_phone_encrypted: str | None = Field(
         default=None, description="AES-256-GCM encrypted phone for WhatsApp"
     )
     party_size: int = Field(ge=1, le=20)
@@ -150,9 +150,9 @@ class Reservation(SQLModel, table=True):
     status: ReservationStatus = Field(default=ReservationStatus.confirmed)
     whatsapp_sent: bool = Field(default=False)
     whatsapp_consent: bool = Field(default=False)
-    notes: Optional[str] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    notes: str | None = Field(default=None)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class CallerPreferences(SQLModel, table=True):
@@ -165,10 +165,10 @@ class CallerPreferences(SQLModel, table=True):
     )
     whatsapp_opt_out: bool = Field(default=False, description="Caller replied STOP")
     transcript_opt_out: bool = Field(default=False, description="Caller said don't record")
-    first_seen: Optional[datetime] = Field(default=None)
-    last_seen: Optional[datetime] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    first_seen: datetime | None = Field(default=None)
+    last_seen: datetime | None = Field(default=None)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class WhatsappFollowup(SQLModel, table=True):
@@ -182,14 +182,14 @@ class WhatsappFollowup(SQLModel, table=True):
         description="Unique identifier",
     )
     business_id: str = Field(index=True)
-    call_log_id: Optional[str] = Field(default=None, foreign_key="call_logs.id")
+    call_log_id: str | None = Field(default=None, foreign_key="call_logs.id")
     customer_phone_encrypted: str = Field(description="AES-256-GCM encrypted phone")
-    reason: Optional[FollowupReason] = Field(default=None)
-    summary: Optional[str] = Field(default=None, max_length=500)
+    reason: FollowupReason | None = Field(default=None)
+    summary: str | None = Field(default=None, max_length=500)
     status: FollowupStatus = Field(default=FollowupStatus.pending, index=True)
     whatsapp_consent: bool = Field(default=True)
-    sent_at: Optional[datetime] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    sent_at: datetime | None = Field(default=None)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class AuditLog(SQLModel, table=True):
@@ -202,8 +202,8 @@ class AuditLog(SQLModel, table=True):
         primary_key=True,
         description="Unique identifier",
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow, index=True)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), index=True)
     action: AuditAction = Field(description="Type of action performed")
-    admin_user: Optional[str] = Field(default=None)
-    details: Optional[str] = Field(default=None, description="JSON with before/after values")
-    ip_address: Optional[str] = Field(default=None)
+    admin_user: str | None = Field(default=None)
+    details: str | None = Field(default=None, description="JSON with before/after values")
+    ip_address: str | None = Field(default=None)

@@ -33,7 +33,10 @@ async def lifespan(app: FastAPI):
         enable_file=settings.is_production,
     )
 
-    await init_db()
+    # Only auto-create tables in development
+    # Production should use: alembic upgrade head
+    if not settings.is_production:
+        await init_db()
 
     yield
 

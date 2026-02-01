@@ -69,6 +69,38 @@ class Settings(BaseSettings):
     )
 
     # ==========================================================================
+    # WhatsApp Integration
+    # ==========================================================================
+    whatsapp_webhook_url: str | None = Field(
+        default=None,
+        description="Webhook URL for sending WhatsApp messages",
+    )
+    whatsapp_webhook_token: SecretStr | None = Field(
+        default=None,
+        description="Bearer token for WhatsApp webhook authentication",
+    )
+
+    # ==========================================================================
+    # TTS Configuration
+    # ==========================================================================
+    piper_model_path: str | None = Field(
+        default=None,
+        description="Path to Piper ONNX model file. Defaults to data/models/piper/{voice}.onnx",
+    )
+    piper_voice: str = Field(
+        default="hi_IN-female-medium",
+        description="Piper voice name (used for default model path)",
+    )
+    edge_tts_voice: str = Field(
+        default="hi-IN-SwaraNeural",
+        description="Edge TTS voice name",
+    )
+    tts_target_sample_rate: int = Field(
+        default=8000,
+        description="Target sample rate for TTS output (8000 for telephony)",
+    )
+
+    # ==========================================================================
     # Feature Flags
     # ==========================================================================
     edge_tts_enabled: bool = Field(
@@ -85,7 +117,7 @@ class Settings(BaseSettings):
         return self.environment == "production"
 
     @property
-    def redis_settings(self) -> dict:
+    def redis_settings(self):
         """Get Redis connection settings for arq."""
         from arq.connections import RedisSettings
 
@@ -121,4 +153,4 @@ def get_settings() -> Settings:
     Use dependency injection in FastAPI:
         settings: Settings = Depends(get_settings)
     """
-    return Settings()
+    return Settings()  # type: ignore[call-arg]  # loads from env

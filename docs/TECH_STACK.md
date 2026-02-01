@@ -120,6 +120,12 @@ dependencies = [
 | **Engine** | Edge TTS | API | Microsoft's free TTS, excellent Hindi |
 | **Python Client** | edge-tts | 6.x | Async, easy to use |
 
+**MP3 Decoding (Edge TTS output)**  
+Edge TTS streams MP3 audio. Decoding requires one of:
+- **pydub + ffmpeg** (recommended, most reliable)
+- **miniaudio** (pure Python, bundled decoders)
+- **soundfile** with MP3-enabled libsndfile (system-dependent)
+
 > ⚠️ **Warning:** Edge TTS uses Microsoft's unofficial/consumer endpoint (same as
 > Edge browser's "Read Aloud" feature). It can throttle, rate-limit, or change without
 > notice. **Treat as feature-flagged fallback only.** For production reliability:
@@ -132,6 +138,8 @@ dependencies = [
 dependencies = [
     "piper-tts>=1.2.0",
     "edge-tts>=6.1.0",  # Feature-flagged fallback
+    "pydub>=0.25.1",    # MP3 decode (requires ffmpeg)
+    "miniaudio>=1.59",  # MP3 decode (pure Python)
 ]
 ```
 
@@ -140,7 +148,7 @@ dependencies = [
 | Component | Choice | Version | Rationale |
 |-----------|--------|---------|-----------|
 | **Provider** | Groq | API | Free tier, fastest inference |
-| **Model** | llama-3.1-70b-versatile | - | Best quality on free tier |
+| **Model** | llama-3.3-70b-versatile | - | Best quality on free tier |
 | **SDK** | groq | 0.13.x | Official Python SDK |
 
 ```toml
@@ -308,6 +316,12 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str = "redis://localhost:6379"
+
+    # TTS
+    piper_model_path: str | None = None
+    piper_voice: str = "hi_IN-female-medium"
+    edge_tts_voice: str = "hi-IN-SwaraNeural"
+    tts_target_sample_rate: int = 8000
 
     # Feature Flags
     edge_tts_enabled: bool = False  # Enable Edge TTS fallback (unofficial API)
@@ -747,6 +761,16 @@ REDIS_URL=redis://localhost:6379
 DEBUG=false
 LOG_LEVEL=INFO
 ENVIRONMENT=production
+
+# WhatsApp Webhook (optional)
+WHATSAPP_WEBHOOK_URL=
+WHATSAPP_WEBHOOK_TOKEN=
+
+# TTS
+PIPER_MODEL_PATH=
+PIPER_VOICE=hi_IN-female-medium
+EDGE_TTS_VOICE=hi-IN-SwaraNeural
+TTS_TARGET_SAMPLE_RATE=8000
 
 # Feature Flags
 EDGE_TTS_ENABLED=false  # Enable Edge TTS as fallback (unofficial API, may be unreliable)

@@ -10,7 +10,7 @@ You are working on **Vartalaap**, a voice bot platform for local Indian business
 ## Stack Summary
 
 - **STT:** Deepgram (streaming, Hindi support)
-- **LLM:** Groq (llama-3.1-70b-versatile, streaming)
+- **LLM:** Groq (llama-3.3-70b-versatile, streaming)
 - **TTS Primary:** Piper (self-hosted, CPU-friendly)
 - **TTS Fallback:** Edge TTS (feature-flagged)
 - **Telephony:** Plivo (WebSocket audio streams)
@@ -153,7 +153,7 @@ from loguru import logger
 class GroqLLM:
     def __init__(self, api_key: str):
         self.client = AsyncGroq(api_key=api_key)
-        self.model = "llama-3.1-70b-versatile"
+        self.model = "llama-3.3-70b-versatile"
 
     async def stream_response(
         self,

@@ -84,7 +84,7 @@ def setup_logging(
     logger.info(f"Logging initialized at {level} level")
 
 
-def get_logger(name: str) -> "logger":
+def get_logger(name: str) -> "logger":  # type: ignore[valid-type]
     """Get a logger instance with the given name.
 
     Usage:
@@ -113,7 +113,7 @@ def sanitize_for_log(data: dict) -> dict:
     Masks: Any field containing 'phone'
     """
     sensitive_fields = {"customer_phone_encrypted", "caller_id_hash", "phone_hash_pepper"}
-    result = {}
+    result: dict = {}
 
     for key, value in data.items():
         if key in sensitive_fields:

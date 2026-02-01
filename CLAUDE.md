@@ -38,7 +38,7 @@ Codegen: datamodel-codegen + fastapi-crudrouter + alembic
 | **API** | FastAPI 0.115.x, uvicorn, WebSockets |
 | **Database** | SQLite + SQLModel + Alembic migrations |
 | **STT** | Deepgram (streaming, Hindi support) |
-| **LLM** | Groq (llama-3.1-70b-versatile, streaming) |
+| **LLM** | Groq (llama-3.3-70b-versatile, streaming) |
 | **TTS** | Piper (primary, self-hosted) / Edge TTS (fallback, feature-flagged) |
 | **Telephony** | Plivo (WebSocket audio streams) |
 | **Background Tasks** | arq + Redis |
@@ -140,6 +140,17 @@ vartalaap/
 - Single admin user (MVP)
 - bcrypt password hash in `.env`
 - Streamlit runs on subdomain: `admin.vartalaap.yourdomain.com`
+
+---
+
+## Claude Code Tools
+
+| Tool | Command | Use When |
+|------|---------|----------|
+| **osgrep** | `osgrep "question"` | Semantic code search - find code by concept, not just text. Ask "where is X implemented?", "how does Y work?", "find the logic for Z". Returns file paths with line numbers and code snippets. |
+| **/commit** | `/commit` | Create git commits with proper message formatting |
+
+**Note:** For greenfield work (creating new files), direct file creation is faster. Use `osgrep` when navigating existing code.
 
 ---
 
