@@ -6,10 +6,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from pydantic import BaseModel, Field as PydanticField
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
 
 from src.db.models import KnowledgeCategory
-
 
 # =============================================================================
 # Category-specific Metadata Schemas
@@ -97,7 +97,7 @@ def parse_metadata(
         pass
 
     # Return raw data if validation fails (for backwards compat)
-    return data
+    return dict(data) if isinstance(data, dict) else {}
 
 
 @dataclass(frozen=True)

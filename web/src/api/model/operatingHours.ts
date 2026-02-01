@@ -16,4 +16,6 @@ export interface OperatingHours {
   open?: OperatingHoursOpen;
   /** Closing time (HH:MM) or null if closed */
   close?: OperatingHoursClose;
+  /** True if close time is the next day (e.g., 22:00-02:00) */
+  overnight?: boolean;
 }

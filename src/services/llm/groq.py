@@ -298,7 +298,8 @@ class GroqService:
             if knowledge_tokens > MAX_KNOWLEDGE_TOKENS:
                 # Truncate by reducing items until within budget
                 logger.warning(
-                    f"Knowledge section exceeds budget: {knowledge_tokens} > {MAX_KNOWLEDGE_TOKENS} tokens"
+                    f"Knowledge section exceeds budget: {knowledge_tokens} "
+                    f"> {MAX_KNOWLEDGE_TOKENS} tokens"
                 )
                 # Take fewer items - rebuild with reduced set
                 items = context.retrieved_knowledge.items

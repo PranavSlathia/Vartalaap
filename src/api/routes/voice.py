@@ -1,17 +1,17 @@
 """Voice API endpoint for browser-based voice testing."""
 
-import io
-import os
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
-from pydub import AudioSegment
+from pydantic import BaseModel
 
 from src.config import get_settings
 from src.core.session import CallSession
-from src.services.stt.deepgram import DeepgramService
+from src.db.models import CallLog, CallOutcome, CallSource
+from src.db.session import get_session_context
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +36,7 @@ def get_or_create_session(session_id: str) -> CallSession:
 async def transcribe_webm(audio_data: bytes) -> str:
     """Transcribe webm audio using Deepgram."""
     import asyncio
+
     from deepgram import DeepgramClient, PrerecordedOptions
 
     try:
@@ -62,7 +63,7 @@ async def transcribe_webm(audio_data: bytes) -> str:
         if results and results.channels:
             alternatives = results.channels[0].alternatives
             if alternatives:
-                transcript = alternatives[0].transcript
+                transcript: str = alternatives[0].transcript or ""
                 logger.info(f"Transcribed: {transcript[:50]}..." if transcript else "No transcript")
                 return transcript
 
@@ -205,3 +206,110 @@ async def text_to_speech(request: dict):
 
     audio_url = generate_tts(text)
     return JSONResponse({"audio_url": audio_url})
+
+
+class EndSessionRequest(BaseModel):
+    """Request body for ending a voice test session."""
+
+    session_id: str
+
+
+class EndSessionResponse(BaseModel):
+    """Response for ending a voice test session."""
+
+    call_log_id: str
+    total_turns: int
+    analysis_queued: bool
+
+
+@router.post("/voice/end-session", response_model=EndSessionResponse)
+async def end_session(request: EndSessionRequest):
+    """End a voice test session and persist call log.
+
+    This endpoint:
+    1. Creates a CallLog entry with call_source='voice_test'
+    2. Queues the analyze_transcript_quality background job
+    3. Cleans up the in-memory session
+
+    Returns the call_log_id for tracking.
+    """
+    session_id = request.session_id
+
+    # Get session data
+    session = _sessions.get(session_id)
+    if not session:
+        return JSONResponse(
+            {"error": f"Session not found: {session_id}"},
+            status_code=404,
+        )
+
+    try:
+        # Get transcript and metrics from session
+        transcript = session.get_transcript()
+        metrics = session.get_metrics()
+        now = datetime.now(UTC)
+
+        # Calculate duration
+        duration_seconds = int((now - session.call_start).total_seconds())
+
+        # Create CallLog entry
+        async with get_session_context() as db_session:
+            call_log = CallLog(
+                id=session.call_id,
+                business_id=session.business_id,
+                caller_id_hash=None,  # No phone for browser tests
+                call_start=session.call_start,
+                call_end=now,
+                duration_seconds=duration_seconds,
+                detected_language=(
+                    session.detected_language
+                    if session.detected_language.value != "unknown"
+                    else None
+                ),
+                transcript=transcript if transcript else None,
+                extracted_info=None,
+                outcome=CallOutcome.resolved,
+                consent_type=None,
+                call_source=CallSource.voice_test,
+                stt_latency_p50_ms=metrics.get("p50_first_word_ms"),
+                llm_latency_p50_ms=metrics.get("p50_first_token_ms"),
+                total_turns=metrics.get("total_llm_calls", 0),
+            )
+            db_session.add(call_log)
+            await db_session.commit()
+            await db_session.refresh(call_log)
+
+            logger.info(f"Created call log for voice test: {call_log.id}")
+
+        # Queue background analysis job
+        analysis_queued = False
+        if transcript:
+            try:
+                settings = get_settings()
+                from arq import create_pool
+
+                pool = await create_pool(settings.redis_settings)
+                await pool.enqueue_job("generate_call_summary", session.call_id)
+                await pool.enqueue_job("analyze_transcript_quality", session.call_id)
+                await pool.close()
+                analysis_queued = True
+                logger.info(f"Queued analysis for voice test: {session.call_id}")
+            except Exception as e:
+                logger.warning(f"Failed to queue analysis job: {e}")
+
+        # Clean up session
+        await session.close()
+        del _sessions[session_id]
+
+        return EndSessionResponse(
+            call_log_id=session.call_id,
+            total_turns=metrics.get("total_llm_calls", 0),
+            analysis_queued=analysis_queued,
+        )
+
+    except Exception as e:
+        logger.exception(f"Error ending session {session_id}")
+        return JSONResponse(
+            {"error": str(e)},
+            status_code=500,
+        )

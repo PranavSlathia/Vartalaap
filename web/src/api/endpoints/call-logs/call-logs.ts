@@ -5,15 +5,18 @@
  * Voice bot platform for local Indian businesses
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
   UseSuspenseQueryOptions,
@@ -26,6 +29,7 @@ import type {
   GetCallLogSummaryApiCallLogsSummaryGetParams,
   HTTPValidationError,
   ListCallLogsApiCallLogsGetParams,
+  RateCallApiCallLogsCallLogIdRatingPatchParams,
 } from "../../model";
 
 import { customInstance } from "../../mutator/custom-instance";
@@ -36,7 +40,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 /**
  * List call logs with optional filters.
 
-Security: business_id is required to prevent cross-tenant data access.
+Security: Requires JWT authentication. business_id must match authorized tenant.
  * @summary List Call Logs
  */
 export const listCallLogsApiCallLogsGet = (
@@ -345,7 +349,7 @@ export function useListCallLogsApiCallLogsGetSuspense<
 /**
  * Get summary statistics for call logs.
 
-Security: business_id is required to prevent cross-tenant data access.
+Security: Requires JWT authentication. business_id must match authorized tenant.
  * @summary Get Call Log Summary
  */
 export const getCallLogSummaryApiCallLogsSummaryGet = (
@@ -657,6 +661,8 @@ export function useGetCallLogSummaryApiCallLogsSummaryGetSuspense<
 
 /**
  * Get a call log by ID.
+
+Security: Requires JWT authentication. Call log must belong to authorized tenant.
  * @summary Get Call Log
  */
 export const getCallLogApiCallLogsCallLogIdGet = (
@@ -968,3 +974,106 @@ export function useGetCallLogApiCallLogsCallLogIdGetSuspense<
 
   return query;
 }
+
+/**
+ * Rate a completed call.
+
+Allows admin to add a rating and optional feedback for call quality tracking.
+
+Security: Requires JWT authentication. Call log must belong to authorized tenant.
+ * @summary Rate Call
+ */
+export const rateCallApiCallLogsCallLogIdRatingPatch = (
+  callLogId: string,
+  params: RateCallApiCallLogsCallLogIdRatingPatchParams,
+  options?: SecondParameter<typeof customInstance>,
+) => {
+  return customInstance<CallLogResponse>(
+    { url: `/api/call-logs/${callLogId}/rating`, method: "PATCH", params },
+    options,
+  );
+};
+
+export const getRateCallApiCallLogsCallLogIdRatingPatchMutationOptions = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rateCallApiCallLogsCallLogIdRatingPatch>>,
+    TError,
+    {
+      callLogId: string;
+      params: RateCallApiCallLogsCallLogIdRatingPatchParams;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rateCallApiCallLogsCallLogIdRatingPatch>>,
+  TError,
+  { callLogId: string; params: RateCallApiCallLogsCallLogIdRatingPatchParams },
+  TContext
+> => {
+  const mutationKey = ["rateCallApiCallLogsCallLogIdRatingPatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rateCallApiCallLogsCallLogIdRatingPatch>>,
+    { callLogId: string; params: RateCallApiCallLogsCallLogIdRatingPatchParams }
+  > = (props) => {
+    const { callLogId, params } = props ?? {};
+
+    return rateCallApiCallLogsCallLogIdRatingPatch(
+      callLogId,
+      params,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RateCallApiCallLogsCallLogIdRatingPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rateCallApiCallLogsCallLogIdRatingPatch>>
+>;
+
+export type RateCallApiCallLogsCallLogIdRatingPatchMutationError =
+  ErrorType<HTTPValidationError>;
+
+/**
+ * @summary Rate Call
+ */
+export const useRateCallApiCallLogsCallLogIdRatingPatch = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof rateCallApiCallLogsCallLogIdRatingPatch>>,
+      TError,
+      {
+        callLogId: string;
+        params: RateCallApiCallLogsCallLogIdRatingPatchParams;
+      },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof rateCallApiCallLogsCallLogIdRatingPatch>>,
+  TError,
+  { callLogId: string; params: RateCallApiCallLogsCallLogIdRatingPatchParams },
+  TContext
+> => {
+  const mutationOptions =
+    getRateCallApiCallLogsCallLogIdRatingPatchMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};

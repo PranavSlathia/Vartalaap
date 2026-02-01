@@ -1,3 +1,5 @@
+Uninstalled 1 package in 1.07s
+Installed 1 package in 189ms
 {
   "openapi": "3.1.0",
   "info": {
@@ -178,7 +180,7 @@
           "Reservations"
         ],
         "summary": "List Reservations",
-        "description": "List reservations with optional filters.\n\nSecurity: business_id is required to prevent cross-tenant data access.",
+        "description": "List reservations with optional filters.\n\nSecurity: Requires JWT authentication. business_id must match authorized tenant.",
         "operationId": "list_reservations_api_reservations_get",
         "parameters": [
           {
@@ -264,6 +266,38 @@
               "default": 100,
               "title": "Limit"
             }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
         "responses": {
@@ -299,8 +333,42 @@
           "Reservations"
         ],
         "summary": "Create Reservation",
-        "description": "Create a new reservation.",
+        "description": "Create a new reservation.\n\nSecurity: Requires JWT authentication. Can only create reservations for authorized tenant.",
         "operationId": "create_reservation_api_reservations_post",
+        "parameters": [
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -342,7 +410,7 @@
           "Reservations"
         ],
         "summary": "Get Reservation",
-        "description": "Get a reservation by ID.",
+        "description": "Get a reservation by ID.\n\nSecurity: Requires JWT authentication. Reservation must belong to authorized tenant.",
         "operationId": "get_reservation_api_reservations__reservation_id__get",
         "parameters": [
           {
@@ -352,6 +420,38 @@
             "schema": {
               "type": "string",
               "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -384,7 +484,7 @@
           "Reservations"
         ],
         "summary": "Update Reservation",
-        "description": "Update a reservation (partial update).",
+        "description": "Update a reservation (partial update).\n\nSecurity: Requires JWT authentication. Reservation must belong to authorized tenant.",
         "operationId": "update_reservation_api_reservations__reservation_id__patch",
         "parameters": [
           {
@@ -394,6 +494,38 @@
             "schema": {
               "type": "string",
               "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -436,7 +568,7 @@
           "Reservations"
         ],
         "summary": "Delete Reservation",
-        "description": "Delete a reservation.",
+        "description": "Delete a reservation.\n\nSecurity: Requires JWT authentication. Reservation must belong to authorized tenant.",
         "operationId": "delete_reservation_api_reservations__reservation_id__delete",
         "parameters": [
           {
@@ -446,6 +578,38 @@
             "schema": {
               "type": "string",
               "title": "Reservation Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -473,7 +637,7 @@
           "Knowledge"
         ],
         "summary": "List Knowledge Items",
-        "description": "List knowledge items with optional filters.\n\nSecurity: business_id is required to prevent cross-tenant data access.",
+        "description": "List knowledge items with optional filters.\n\nSecurity: Requires JWT authentication. business_id must match authorized tenant.",
         "operationId": "list_knowledge_items_api_knowledge_get",
         "parameters": [
           {
@@ -541,6 +705,38 @@
               "default": 100,
               "title": "Limit"
             }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
         "responses": {
@@ -576,8 +772,42 @@
           "Knowledge"
         ],
         "summary": "Create Knowledge Item",
-        "description": "Create a new knowledge item.",
+        "description": "Create a new knowledge item.\n\nSecurity: Requires JWT authentication. Can only create items for authorized tenant.",
         "operationId": "create_knowledge_item_api_knowledge_post",
+        "parameters": [
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -619,7 +849,7 @@
           "Knowledge"
         ],
         "summary": "Get Knowledge Item",
-        "description": "Get a knowledge item by ID.",
+        "description": "Get a knowledge item by ID.\n\nSecurity: Requires JWT authentication. Item must belong to authorized tenant.",
         "operationId": "get_knowledge_item_api_knowledge__item_id__get",
         "parameters": [
           {
@@ -629,6 +859,38 @@
             "schema": {
               "type": "string",
               "title": "Item Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -661,7 +923,7 @@
           "Knowledge"
         ],
         "summary": "Update Knowledge Item",
-        "description": "Update a knowledge item (partial update).",
+        "description": "Update a knowledge item (partial update).\n\nSecurity: Requires JWT authentication. Item must belong to authorized tenant.",
         "operationId": "update_knowledge_item_api_knowledge__item_id__patch",
         "parameters": [
           {
@@ -671,6 +933,38 @@
             "schema": {
               "type": "string",
               "title": "Item Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -713,7 +1007,7 @@
           "Knowledge"
         ],
         "summary": "Delete Knowledge Item",
-        "description": "Delete a knowledge item.",
+        "description": "Delete a knowledge item.\n\nSecurity: Requires JWT authentication. Item must belong to authorized tenant.",
         "operationId": "delete_knowledge_item_api_knowledge__item_id__delete",
         "parameters": [
           {
@@ -723,6 +1017,38 @@
             "schema": {
               "type": "string",
               "title": "Item Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -749,9 +1075,9 @@
           "Knowledge",
           "Knowledge"
         ],
-        "summary": "Search Knowledge",
-        "description": "Search knowledge items using text matching.\n\nTODO: Integrate with ChromaDB for vector similarity search.\nCurrent implementation uses simple text matching.",
-        "operationId": "search_knowledge_api_knowledge_search_post",
+        "summary": "Search Knowledge Items",
+        "description": "Search knowledge items using vector similarity.\n\nUses ChromaDB + sentence-transformers for semantic search.\nFalls back to keyword search if vector store is unavailable.\n\nSecurity: Requires JWT authentication. business_id must match authorized tenant.",
+        "operationId": "search_knowledge_items_api_knowledge_search_post",
         "parameters": [
           {
             "name": "query",
@@ -800,6 +1126,38 @@
               "default": 5,
               "title": "Limit"
             }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
         "responses": {
@@ -812,7 +1170,7 @@
                   "items": {
                     "$ref": "#/components/schemas/KnowledgeSearchResult"
                   },
-                  "title": "Response Search Knowledge Api Knowledge Search Post"
+                  "title": "Response Search Knowledge Items Api Knowledge Search Post"
                 }
               }
             }
@@ -837,7 +1195,7 @@
           "Call Logs"
         ],
         "summary": "List Call Logs",
-        "description": "List call logs with optional filters.\n\nSecurity: business_id is required to prevent cross-tenant data access.",
+        "description": "List call logs with optional filters.\n\nSecurity: Requires JWT authentication. business_id must match authorized tenant.",
         "operationId": "list_call_logs_api_call_logs_get",
         "parameters": [
           {
@@ -923,6 +1281,38 @@
               "default": 100,
               "title": "Limit"
             }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
         "responses": {
@@ -960,7 +1350,7 @@
           "Call Logs"
         ],
         "summary": "Get Call Log Summary",
-        "description": "Get summary statistics for call logs.\n\nSecurity: business_id is required to prevent cross-tenant data access.",
+        "description": "Get summary statistics for call logs.\n\nSecurity: Requires JWT authentication. business_id must match authorized tenant.",
         "operationId": "get_call_log_summary_api_call_logs_summary_get",
         "parameters": [
           {
@@ -1007,6 +1397,38 @@
               ],
               "title": "Date To"
             }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
         "responses": {
@@ -1040,7 +1462,7 @@
           "Call Logs"
         ],
         "summary": "Get Call Log",
-        "description": "Get a call log by ID.",
+        "description": "Get a call log by ID.\n\nSecurity: Requires JWT authentication. Call log must belong to authorized tenant.",
         "operationId": "get_call_log_api_call_logs__call_log_id__get",
         "parameters": [
           {
@@ -1050,6 +1472,38 @@
             "schema": {
               "type": "string",
               "title": "Call Log Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -1077,6 +1531,756 @@
         }
       }
     },
+    "/api/call-logs/{call_log_id}/rating": {
+      "patch": {
+        "tags": [
+          "Call Logs",
+          "Call Logs"
+        ],
+        "summary": "Rate Call",
+        "description": "Rate a completed call.\n\nAllows admin to add a rating and optional feedback for call quality tracking.\n\nSecurity: Requires JWT authentication. Call log must belong to authorized tenant.",
+        "operationId": "rate_call_api_call_logs__call_log_id__rating_patch",
+        "parameters": [
+          {
+            "name": "call_log_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Call Log Id"
+            }
+          },
+          {
+            "name": "rating",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "description": "Rating from 1-5 stars",
+              "title": "Rating"
+            },
+            "description": "Rating from 1-5 stars"
+          },
+          {
+            "name": "feedback",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional feedback text",
+              "title": "Feedback"
+            },
+            "description": "Optional feedback text"
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/RatingMethod",
+              "description": "How rating was collected",
+              "default": "admin"
+            },
+            "description": "How rating was collected"
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallLogResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews": {
+      "get": {
+        "tags": [
+          "Reviews",
+          "Transcript Reviews"
+        ],
+        "summary": "List Reviews",
+        "description": "List transcript reviews for a business.\n\nSecurity: Requires JWT authentication. business_id must match authorized tenant.",
+        "operationId": "list_reviews_api_reviews_get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Business ID for tenant isolation",
+              "title": "Business Id"
+            },
+            "description": "Business ID for tenant isolation"
+          },
+          {
+            "name": "min_score",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 5,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Score"
+            }
+          },
+          {
+            "name": "max_score",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 5,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Score"
+            }
+          },
+          {
+            "name": "has_issues",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to reviews with issues",
+              "title": "Has Issues"
+            },
+            "description": "Filter to reviews with issues"
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TranscriptReviewResponse"
+                  },
+                  "title": "Response List Reviews Api Reviews Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/stats": {
+      "get": {
+        "tags": [
+          "Reviews",
+          "Transcript Reviews"
+        ],
+        "summary": "Get Review Stats",
+        "description": "Get statistics about transcript reviews.\n\nSecurity: Requires JWT authentication. business_id must match authorized tenant.",
+        "operationId": "get_review_stats_api_reviews_stats_get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Business ID for tenant isolation",
+              "title": "Business Id"
+            },
+            "description": "Business ID for tenant isolation"
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewStatsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/{review_id}": {
+      "get": {
+        "tags": [
+          "Reviews",
+          "Transcript Reviews"
+        ],
+        "summary": "Get Review",
+        "description": "Get a specific transcript review.\n\nSecurity: Requires JWT authentication. Review must belong to authorized tenant.",
+        "operationId": "get_review_api_reviews__review_id__get",
+        "parameters": [
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Review Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptReviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/analyze": {
+      "post": {
+        "tags": [
+          "Reviews",
+          "Transcript Reviews"
+        ],
+        "summary": "Trigger Analysis",
+        "description": "Trigger transcript analysis for a specific call.\n\nQueues a background job to analyze the call using AI agents.\nSecurity: Requires JWT authentication. Call must belong to authorized tenant.",
+        "operationId": "trigger_analysis_api_reviews_analyze_post",
+        "parameters": [
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerAnalysisRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerAnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/suggestions": {
+      "get": {
+        "tags": [
+          "Reviews",
+          "Transcript Reviews"
+        ],
+        "summary": "List Suggestions",
+        "description": "List improvement suggestions for a business.\n\nSecurity: Requires JWT authentication. business_id must match authorized tenant.",
+        "operationId": "list_suggestions_api_reviews_suggestions_get",
+        "parameters": [
+          {
+            "name": "business_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Business ID for tenant isolation",
+              "title": "Business Id"
+            },
+            "description": "Business ID for tenant isolation"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SuggestionStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/IssueCategory"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "min_priority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 5,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Priority"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImprovementSuggestionResponse"
+                  },
+                  "title": "Response List Suggestions Api Reviews Suggestions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/suggestions/{suggestion_id}": {
+      "patch": {
+        "tags": [
+          "Reviews",
+          "Transcript Reviews"
+        ],
+        "summary": "Update Suggestion",
+        "description": "Update the status of an improvement suggestion.\n\nUse this to mark suggestions as implemented or rejected.\nSecurity: Requires JWT authentication. Suggestion must belong to authorized tenant.",
+        "operationId": "update_suggestion_api_reviews_suggestions__suggestion_id__patch",
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Suggestion Id"
+            }
+          },
+          {
+            "name": "x-business-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Business-Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSuggestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImprovementSuggestionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/business/{business_id}": {
       "get": {
         "tags": [
@@ -1084,7 +2288,7 @@
           "business"
         ],
         "summary": "Get Business",
-        "description": "Get business settings by ID.\n\nRequires X-Business-ID header matching the requested business_id.",
+        "description": "Get business settings by ID.\n\nRequires JWT authentication and X-Business-ID header.\nUser must have access to the requested business.",
         "operationId": "get_business_api_business__business_id__get",
         "parameters": [
           {
@@ -1158,7 +2362,7 @@
           "business"
         ],
         "summary": "Update Business",
-        "description": "Update business settings.\n\nRequires X-Business-ID header matching the requested business_id.",
+        "description": "Update business settings.\n\nRequires JWT authentication and X-Business-ID header.\nUser must have access to the requested business.",
         "operationId": "update_business_api_business__business_id__patch",
         "parameters": [
           {
@@ -1364,6 +2568,48 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/voice/end-session": {
+      "post": {
+        "tags": [
+          "Voice"
+        ],
+        "summary": "End Session",
+        "description": "End a voice test session and persist call log.\n\nThis endpoint:\n1. Creates a CallLog entry with call_source='voice_test'\n2. Queues the analyze_transcript_quality background job\n3. Cleans up the in-memory session\n\nReturns the call_log_id for tracking.",
+        "operationId": "end_session_api_voice_end_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndSessionResponse"
+                }
               }
             }
           },
@@ -1619,6 +2865,18 @@
         "title": "BusinessUpdate",
         "description": "Business settings update request."
       },
+      "CallCategory": {
+        "type": "string",
+        "enum": [
+          "booking",
+          "inquiry",
+          "complaint",
+          "spam",
+          "other"
+        ],
+        "title": "CallCategory",
+        "description": "Category/intent of a call."
+      },
       "CallLogResponse": {
         "properties": {
           "id": {
@@ -1721,6 +2979,106 @@
           "created_at": {
             "type": "string",
             "title": "Created At"
+          },
+          "stt_latency_p50_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stt Latency P50 Ms"
+          },
+          "llm_latency_p50_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Latency P50 Ms"
+          },
+          "tts_latency_p50_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tts Latency P50 Ms"
+          },
+          "barge_in_count": {
+            "type": "integer",
+            "title": "Barge In Count",
+            "default": 0
+          },
+          "total_turns": {
+            "type": "integer",
+            "title": "Total Turns",
+            "default": 0
+          },
+          "call_rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Rating"
+          },
+          "caller_feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caller Feedback"
+          },
+          "rating_method": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RatingMethod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "call_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Summary"
+          },
+          "call_category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "call_source": {
+            "$ref": "#/components/schemas/CallSource",
+            "default": "phone"
           }
         },
         "type": "object",
@@ -1793,6 +3151,15 @@
         "title": "CallOutcome",
         "description": "How a call ended."
       },
+      "CallSource": {
+        "type": "string",
+        "enum": [
+          "phone",
+          "voice_test"
+        ],
+        "title": "CallSource",
+        "description": "Source of the call."
+      },
       "ConsentType": {
         "type": "string",
         "enum": [
@@ -1840,6 +3207,44 @@
         "title": "DetectedLanguage",
         "description": "Detected language during call."
       },
+      "EndSessionRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "title": "EndSessionRequest",
+        "description": "Request body for ending a voice test session."
+      },
+      "EndSessionResponse": {
+        "properties": {
+          "call_log_id": {
+            "type": "string",
+            "title": "Call Log Id"
+          },
+          "total_turns": {
+            "type": "integer",
+            "title": "Total Turns"
+          },
+          "analysis_queued": {
+            "type": "boolean",
+            "title": "Analysis Queued"
+          }
+        },
+        "type": "object",
+        "required": [
+          "call_log_id",
+          "total_turns",
+          "analysis_queued"
+        ],
+        "title": "EndSessionResponse",
+        "description": "Response for ending a voice test session."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1866,6 +3271,112 @@
         ],
         "title": "HealthResponse",
         "description": "Basic health check response."
+      },
+      "ImprovementSuggestionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "review_id": {
+            "type": "string",
+            "title": "Review Id"
+          },
+          "business_id": {
+            "type": "string",
+            "title": "Business Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/IssueCategory"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SuggestionStatus"
+          },
+          "implemented_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implemented At"
+          },
+          "implemented_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implemented By"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "review_id",
+          "business_id",
+          "category",
+          "title",
+          "description",
+          "priority",
+          "status",
+          "implemented_at",
+          "implemented_by",
+          "rejection_reason",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ImprovementSuggestionResponse",
+        "description": "Response schema for improvement suggestions."
+      },
+      "IssueCategory": {
+        "type": "string",
+        "enum": [
+          "knowledge_gap",
+          "prompt_weakness",
+          "ux_issue",
+          "stt_error",
+          "tts_issue",
+          "config_error"
+        ],
+        "title": "IssueCategory",
+        "description": "Category of issue identified in transcript review."
       },
       "KnowledgeCategory": {
         "type": "string",
@@ -2162,17 +3673,24 @@
             "$ref": "#/components/schemas/KnowledgeItemResponse"
           },
           "score": {
-            "type": "number",
-            "title": "Score"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score",
+            "description": "Similarity score (0.0-1.0) or null for keyword-only matches"
           }
         },
         "type": "object",
         "required": [
-          "item",
-          "score"
+          "item"
         ],
         "title": "KnowledgeSearchResult",
-        "description": "Search result with similarity score."
+        "description": "Search result with similarity score.\n\nWhen using vector search, score is a real similarity value (0.0-1.0).\nWhen falling back to keyword search, score is None."
       },
       "OperatingHours": {
         "properties": {
@@ -2199,11 +3717,27 @@
             ],
             "title": "Close",
             "description": "Closing time (HH:MM) or null if closed"
+          },
+          "overnight": {
+            "type": "boolean",
+            "title": "Overnight",
+            "description": "True if close time is the next day (e.g., 22:00-02:00)",
+            "default": false
           }
         },
         "type": "object",
         "title": "OperatingHours",
         "description": "Operating hours for a single day."
+      },
+      "RatingMethod": {
+        "type": "string",
+        "enum": [
+          "dtmf",
+          "admin",
+          "auto"
+        ],
+        "title": "RatingMethod",
+        "description": "How a call rating was collected."
       },
       "ReservationCreate": {
         "properties": {
@@ -2524,6 +4058,225 @@
         "type": "object",
         "title": "ReservationUpdate",
         "description": "Schema for updating a reservation (all fields optional)."
+      },
+      "ReviewStatsResponse": {
+        "properties": {
+          "total_reviews": {
+            "type": "integer",
+            "title": "Total Reviews"
+          },
+          "avg_quality_score": {
+            "type": "number",
+            "title": "Avg Quality Score"
+          },
+          "reviews_with_issues": {
+            "type": "integer",
+            "title": "Reviews With Issues"
+          },
+          "knowledge_gaps": {
+            "type": "integer",
+            "title": "Knowledge Gaps"
+          },
+          "prompt_weaknesses": {
+            "type": "integer",
+            "title": "Prompt Weaknesses"
+          },
+          "ux_issues": {
+            "type": "integer",
+            "title": "Ux Issues"
+          },
+          "pending_suggestions": {
+            "type": "integer",
+            "title": "Pending Suggestions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_reviews",
+          "avg_quality_score",
+          "reviews_with_issues",
+          "knowledge_gaps",
+          "prompt_weaknesses",
+          "ux_issues",
+          "pending_suggestions"
+        ],
+        "title": "ReviewStatsResponse",
+        "description": "Statistics about transcript reviews."
+      },
+      "SuggestionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "implemented",
+          "rejected",
+          "deferred"
+        ],
+        "title": "SuggestionStatus",
+        "description": "Status of an improvement suggestion."
+      },
+      "TranscriptReviewResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "call_log_id": {
+            "type": "string",
+            "title": "Call Log Id"
+          },
+          "business_id": {
+            "type": "string",
+            "title": "Business Id"
+          },
+          "quality_score": {
+            "type": "integer",
+            "title": "Quality Score"
+          },
+          "issues_json": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issues Json"
+          },
+          "suggestions_json": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestions Json"
+          },
+          "has_unanswered_query": {
+            "type": "boolean",
+            "title": "Has Unanswered Query"
+          },
+          "has_knowledge_gap": {
+            "type": "boolean",
+            "title": "Has Knowledge Gap"
+          },
+          "has_prompt_weakness": {
+            "type": "boolean",
+            "title": "Has Prompt Weakness"
+          },
+          "has_ux_issue": {
+            "type": "boolean",
+            "title": "Has Ux Issue"
+          },
+          "agent_model": {
+            "type": "string",
+            "title": "Agent Model"
+          },
+          "review_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Latency Ms"
+          },
+          "reviewed_at": {
+            "type": "string",
+            "title": "Reviewed At"
+          },
+          "reviewed_by": {
+            "type": "string",
+            "title": "Reviewed By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "call_log_id",
+          "business_id",
+          "quality_score",
+          "issues_json",
+          "suggestions_json",
+          "has_unanswered_query",
+          "has_knowledge_gap",
+          "has_prompt_weakness",
+          "has_ux_issue",
+          "agent_model",
+          "review_latency_ms",
+          "reviewed_at",
+          "reviewed_by"
+        ],
+        "title": "TranscriptReviewResponse",
+        "description": "Response schema for transcript reviews."
+      },
+      "TriggerAnalysisRequest": {
+        "properties": {
+          "call_log_id": {
+            "type": "string",
+            "title": "Call Log Id",
+            "description": "ID of the call to analyze"
+          }
+        },
+        "type": "object",
+        "required": [
+          "call_log_id"
+        ],
+        "title": "TriggerAnalysisRequest",
+        "description": "Request to trigger analysis for a call."
+      },
+      "TriggerAnalysisResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "call_log_id": {
+            "type": "string",
+            "title": "Call Log Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "call_log_id"
+        ],
+        "title": "TriggerAnalysisResponse",
+        "description": "Response after triggering analysis."
+      },
+      "UpdateSuggestionRequest": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/SuggestionStatus"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "UpdateSuggestionRequest",
+        "description": "Request to update suggestion status."
       },
       "ValidationError": {
         "properties": {

@@ -13,6 +13,15 @@ import type { CallLogResponseTranscript } from "./callLogResponseTranscript";
 import type { CallLogResponseExtractedInfo } from "./callLogResponseExtractedInfo";
 import type { CallLogResponseOutcome } from "./callLogResponseOutcome";
 import type { CallLogResponseConsentType } from "./callLogResponseConsentType";
+import type { CallLogResponseSttLatencyP50Ms } from "./callLogResponseSttLatencyP50Ms";
+import type { CallLogResponseLlmLatencyP50Ms } from "./callLogResponseLlmLatencyP50Ms";
+import type { CallLogResponseTtsLatencyP50Ms } from "./callLogResponseTtsLatencyP50Ms";
+import type { CallLogResponseCallRating } from "./callLogResponseCallRating";
+import type { CallLogResponseCallerFeedback } from "./callLogResponseCallerFeedback";
+import type { CallLogResponseRatingMethod } from "./callLogResponseRatingMethod";
+import type { CallLogResponseCallSummary } from "./callLogResponseCallSummary";
+import type { CallLogResponseCallCategory } from "./callLogResponseCallCategory";
+import type { CallSource } from "./callSource";
 
 /**
  * Response schema for call logs.
@@ -30,4 +39,15 @@ export interface CallLogResponse {
   outcome: CallLogResponseOutcome;
   consent_type: CallLogResponseConsentType;
   created_at: string;
+  stt_latency_p50_ms?: CallLogResponseSttLatencyP50Ms;
+  llm_latency_p50_ms?: CallLogResponseLlmLatencyP50Ms;
+  tts_latency_p50_ms?: CallLogResponseTtsLatencyP50Ms;
+  barge_in_count?: number;
+  total_turns?: number;
+  call_rating?: CallLogResponseCallRating;
+  caller_feedback?: CallLogResponseCallerFeedback;
+  rating_method?: CallLogResponseRatingMethod;
+  call_summary?: CallLogResponseCallSummary;
+  call_category?: CallLogResponseCallCategory;
+  call_source?: CallSource;
 }

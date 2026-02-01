@@ -145,13 +145,13 @@ async def list_reviews(
         query = query.where(TranscriptReview.quality_score <= max_score)  # type: ignore[arg-type]
     if has_issues is True:
         query = query.where(
-            (TranscriptReview.has_unanswered_query == True)  # noqa: E712
+            (TranscriptReview.has_unanswered_query == True)  # type: ignore[arg-type]  # noqa: E712
             | (TranscriptReview.has_knowledge_gap == True)  # noqa: E712
             | (TranscriptReview.has_prompt_weakness == True)  # noqa: E712
             | (TranscriptReview.has_ux_issue == True)  # noqa: E712
         )
 
-    query = query.order_by(desc(TranscriptReview.reviewed_at)).offset(skip).limit(limit)
+    query = query.order_by(desc(TranscriptReview.reviewed_at)).offset(skip).limit(limit)  # type: ignore[arg-type]
 
     result = await session.execute(query)
     reviews = result.scalars().all()
@@ -193,30 +193,30 @@ async def get_review_stats(
             detail=f"Not authorized to access business '{business_id}'",
         )
 
-    # Get review stats
+    # Get review stats (type ignores due to SQLAlchemy/SQLModel typing limitations)
     review_stats = await session.execute(
         select(
-            func.count(TranscriptReview.id),
+            func.count(TranscriptReview.id),  # type: ignore[arg-type]
             func.avg(TranscriptReview.quality_score),
             func.sum(
                 func.cast(
-                    TranscriptReview.has_unanswered_query
+                    TranscriptReview.has_unanswered_query  # type: ignore[arg-type]
                     | TranscriptReview.has_knowledge_gap
                     | TranscriptReview.has_prompt_weakness
                     | TranscriptReview.has_ux_issue,
-                    type_=int,
+                    type_=int,  # type: ignore[arg-type]
                 )
             ),
-            func.sum(func.cast(TranscriptReview.has_knowledge_gap, type_=int)),
-            func.sum(func.cast(TranscriptReview.has_prompt_weakness, type_=int)),
-            func.sum(func.cast(TranscriptReview.has_ux_issue, type_=int)),
+            func.sum(func.cast(TranscriptReview.has_knowledge_gap, type_=int)),  # type: ignore[arg-type]
+            func.sum(func.cast(TranscriptReview.has_prompt_weakness, type_=int)),  # type: ignore[arg-type]
+            func.sum(func.cast(TranscriptReview.has_ux_issue, type_=int)),  # type: ignore[arg-type]
         ).where(TranscriptReview.business_id == business_id)  # type: ignore[arg-type]
     )
     stats = review_stats.one()
 
     # Get pending suggestions count
     suggestions_result = await session.execute(
-        select(func.count(ImprovementSuggestion.id)).where(
+        select(func.count(ImprovementSuggestion.id)).where(  # type: ignore[arg-type]
             ImprovementSuggestion.business_id == business_id,  # type: ignore[arg-type]
             ImprovementSuggestion.status == SuggestionStatus.pending,  # type: ignore[arg-type]
         )
@@ -378,7 +378,7 @@ async def list_suggestions(
         query = query.where(ImprovementSuggestion.priority >= min_priority)  # type: ignore[arg-type]
 
     query = (
-        query.order_by(desc(ImprovementSuggestion.priority))
+        query.order_by(desc(ImprovementSuggestion.priority))  # type: ignore[arg-type]
         .offset(skip)
         .limit(limit)
     )
@@ -444,7 +444,9 @@ async def update_suggestion(
 
     if request.status == SuggestionStatus.implemented:
         suggestion.implemented_at = datetime.now(UTC)
-        suggestion.implemented_by = current_user.email or current_user.preferred_username or current_user.sub
+        suggestion.implemented_by = (
+            current_user.email or current_user.preferred_username or current_user.sub
+        )
     elif request.status == SuggestionStatus.rejected:
         suggestion.rejection_reason = request.rejection_reason
 

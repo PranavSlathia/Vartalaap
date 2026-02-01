@@ -4,6 +4,7 @@ Used by the admin frontend to manage the knowledge base for RAG retrieval.
 Security: All endpoints require JWT authentication and tenant authorization.
 """
 
+import contextlib
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -126,7 +127,7 @@ async def list_knowledge_items(
     if is_active is not None:
         query = query.where(KnowledgeItem.is_active == is_active)  # type: ignore[arg-type]
 
-    query = query.offset(skip).limit(limit).order_by(desc(KnowledgeItem.priority))
+    query = query.offset(skip).limit(limit).order_by(desc(KnowledgeItem.priority))  # type: ignore[arg-type]
 
     result = await session.execute(query)
     items = result.scalars().all()
@@ -242,10 +243,8 @@ async def create_knowledge_item(
             logger.warning(f"Failed to index item {item.id} in ChromaDB: {e}")
             # If embedding was created but commit failed, clean up the orphan
             if store and item.embedding_id:
-                try:
+                with contextlib.suppress(Exception):
                     await store.remove_item_async(data.business_id, item.id)
-                except Exception:
-                    pass  # Best effort cleanup
             item.embedding_id = None  # Reset since not persisted
             # Don't fail the request - DB is source of truth, ChromaDB can be resynced
 
@@ -335,10 +334,8 @@ async def update_knowledge_item(
         logger.warning(f"Failed to sync item {item.id} to ChromaDB: {e}")
         # If embedding was added but commit failed, clean up the orphan
         if store and embedding_added:
-            try:
+            with contextlib.suppress(Exception):
                 await store.remove_item_async(item.business_id, item.id)
-            except Exception:
-                pass  # Best effort cleanup
             item.embedding_id = None
         # Don't fail the request - DB is source of truth, ChromaDB can be resynced
 
@@ -448,7 +445,7 @@ async def search_knowledge_items(
 
         # Fetch full records from DB to get created_at, updated_at, metadata_json
         item_ids = [item.id for item in result.items]
-        stmt = select(KnowledgeItem).where(KnowledgeItem.id.in_(item_ids))  # type: ignore[arg-type]
+        stmt = select(KnowledgeItem).where(KnowledgeItem.id.in_(item_ids))  # type: ignore[attr-defined]
         db_result = await session.execute(stmt)
         db_items = {item.id: item for item in db_result.scalars().all()}
 
@@ -498,7 +495,7 @@ async def _fallback_keyword_search(
     """
     stmt = select(KnowledgeItem).where(
         KnowledgeItem.business_id == business_id,  # type: ignore[arg-type]
-        KnowledgeItem.is_active == True,  # noqa: E712
+        KnowledgeItem.is_active == True,  # type: ignore[arg-type]  # noqa: E712
     )
 
     if category:
@@ -506,12 +503,12 @@ async def _fallback_keyword_search(
 
     # Simple LIKE search on title and content
     stmt = stmt.where(
-        (KnowledgeItem.title.ilike(f"%{query}%"))  # type: ignore[union-attr]
-        | (KnowledgeItem.content.ilike(f"%{query}%"))  # type: ignore[union-attr]
+        (KnowledgeItem.title.ilike(f"%{query}%"))  # type: ignore[attr-defined]
+        | (KnowledgeItem.content.ilike(f"%{query}%"))  # type: ignore[attr-defined]
         | (KnowledgeItem.title_hindi.ilike(f"%{query}%"))  # type: ignore[union-attr]
     )
 
-    stmt = stmt.order_by(desc(KnowledgeItem.priority)).limit(limit)
+    stmt = stmt.order_by(desc(KnowledgeItem.priority)).limit(limit)  # type: ignore[arg-type]
 
     result = await session.execute(stmt)
     items = result.scalars().all()

@@ -11,6 +11,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Dashboard } from '@/pages/Dashboard';
 import { Reservations } from '@/pages/Reservations';
 import { CallLogs } from '@/pages/CallLogs';
+import { Reviews } from '@/pages/Reviews';
 import { Settings } from '@/pages/Settings';
 import { Unauthorized } from '@/pages/Unauthorized';
 import { Layout } from '@/components/layout/Layout';
@@ -36,6 +37,7 @@ export function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/reservations" element={<Reservations />} />
                 <Route path="/call-logs" element={<CallLogs />} />
+                <Route path="/reviews" element={<Reviews />} />
 
                 {/* Knowledge Base */}
                 <Route path="/menu-editor" element={<MenuEditor />} />

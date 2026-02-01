@@ -30,7 +30,7 @@ import type {
   KnowledgeItemUpdate,
   KnowledgeSearchResult,
   ListKnowledgeItemsApiKnowledgeGetParams,
-  SearchKnowledgeApiKnowledgeSearchPostParams,
+  SearchKnowledgeItemsApiKnowledgeSearchPostParams,
 } from "../../model";
 
 import { customInstance } from "../../mutator/custom-instance";
@@ -41,7 +41,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 /**
  * List knowledge items with optional filters.
 
-Security: business_id is required to prevent cross-tenant data access.
+Security: Requires JWT authentication. business_id must match authorized tenant.
  * @summary List Knowledge Items
  */
 export const listKnowledgeItemsApiKnowledgeGet = (
@@ -351,6 +351,8 @@ export function useListKnowledgeItemsApiKnowledgeGetSuspense<
 
 /**
  * Create a new knowledge item.
+
+Security: Requires JWT authentication. Can only create items for authorized tenant.
  * @summary Create Knowledge Item
  */
 export const createKnowledgeItemApiKnowledgePost = (
@@ -446,6 +448,8 @@ export const useCreateKnowledgeItemApiKnowledgePost = <
 };
 /**
  * Get a knowledge item by ID.
+
+Security: Requires JWT authentication. Item must belong to authorized tenant.
  * @summary Get Knowledge Item
  */
 export const getKnowledgeItemApiKnowledgeItemIdGet = (
@@ -762,6 +766,8 @@ export function useGetKnowledgeItemApiKnowledgeItemIdGetSuspense<
 
 /**
  * Update a knowledge item (partial update).
+
+Security: Requires JWT authentication. Item must belong to authorized tenant.
  * @summary Update Knowledge Item
  */
 export const updateKnowledgeItemApiKnowledgeItemIdPatch = (
@@ -861,6 +867,8 @@ export const useUpdateKnowledgeItemApiKnowledgeItemIdPatch = <
 };
 /**
  * Delete a knowledge item.
+
+Security: Requires JWT authentication. Item must belong to authorized tenant.
  * @summary Delete Knowledge Item
  */
 export const deleteKnowledgeItemApiKnowledgeItemIdDelete = (
@@ -948,14 +956,16 @@ export const useDeleteKnowledgeItemApiKnowledgeItemIdDelete = <
   return useMutation(mutationOptions, queryClient);
 };
 /**
- * Search knowledge items using text matching.
+ * Search knowledge items using vector similarity.
 
-TODO: Integrate with ChromaDB for vector similarity search.
-Current implementation uses simple text matching.
- * @summary Search Knowledge
+Uses ChromaDB + sentence-transformers for semantic search.
+Falls back to keyword search if vector store is unavailable.
+
+Security: Requires JWT authentication. business_id must match authorized tenant.
+ * @summary Search Knowledge Items
  */
-export const searchKnowledgeApiKnowledgeSearchPost = (
-  params: SearchKnowledgeApiKnowledgeSearchPostParams,
+export const searchKnowledgeItemsApiKnowledgeSearchPost = (
+  params: SearchKnowledgeItemsApiKnowledgeSearchPostParams,
   options?: SecondParameter<typeof customInstance>,
   signal?: AbortSignal,
 ) => {
@@ -965,24 +975,24 @@ export const searchKnowledgeApiKnowledgeSearchPost = (
   );
 };
 
-export const getSearchKnowledgeApiKnowledgeSearchPostMutationOptions = <
+export const getSearchKnowledgeItemsApiKnowledgeSearchPostMutationOptions = <
   TError = ErrorType<HTTPValidationError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof searchKnowledgeApiKnowledgeSearchPost>>,
+    Awaited<ReturnType<typeof searchKnowledgeItemsApiKnowledgeSearchPost>>,
     TError,
-    { params: SearchKnowledgeApiKnowledgeSearchPostParams },
+    { params: SearchKnowledgeItemsApiKnowledgeSearchPostParams },
     TContext
   >;
   request?: SecondParameter<typeof customInstance>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof searchKnowledgeApiKnowledgeSearchPost>>,
+  Awaited<ReturnType<typeof searchKnowledgeItemsApiKnowledgeSearchPost>>,
   TError,
-  { params: SearchKnowledgeApiKnowledgeSearchPostParams },
+  { params: SearchKnowledgeItemsApiKnowledgeSearchPostParams },
   TContext
 > => {
-  const mutationKey = ["searchKnowledgeApiKnowledgeSearchPost"];
+  const mutationKey = ["searchKnowledgeItemsApiKnowledgeSearchPost"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -992,49 +1002,50 @@ export const getSearchKnowledgeApiKnowledgeSearchPostMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof searchKnowledgeApiKnowledgeSearchPost>>,
-    { params: SearchKnowledgeApiKnowledgeSearchPostParams }
+    Awaited<ReturnType<typeof searchKnowledgeItemsApiKnowledgeSearchPost>>,
+    { params: SearchKnowledgeItemsApiKnowledgeSearchPostParams }
   > = (props) => {
     const { params } = props ?? {};
 
-    return searchKnowledgeApiKnowledgeSearchPost(params, requestOptions);
+    return searchKnowledgeItemsApiKnowledgeSearchPost(params, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type SearchKnowledgeApiKnowledgeSearchPostMutationResult = NonNullable<
-  Awaited<ReturnType<typeof searchKnowledgeApiKnowledgeSearchPost>>
->;
+export type SearchKnowledgeItemsApiKnowledgeSearchPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof searchKnowledgeItemsApiKnowledgeSearchPost>>
+  >;
 
-export type SearchKnowledgeApiKnowledgeSearchPostMutationError =
+export type SearchKnowledgeItemsApiKnowledgeSearchPostMutationError =
   ErrorType<HTTPValidationError>;
 
 /**
- * @summary Search Knowledge
+ * @summary Search Knowledge Items
  */
-export const useSearchKnowledgeApiKnowledgeSearchPost = <
+export const useSearchKnowledgeItemsApiKnowledgeSearchPost = <
   TError = ErrorType<HTTPValidationError>,
   TContext = unknown,
 >(
   options?: {
     mutation?: UseMutationOptions<
-      Awaited<ReturnType<typeof searchKnowledgeApiKnowledgeSearchPost>>,
+      Awaited<ReturnType<typeof searchKnowledgeItemsApiKnowledgeSearchPost>>,
       TError,
-      { params: SearchKnowledgeApiKnowledgeSearchPostParams },
+      { params: SearchKnowledgeItemsApiKnowledgeSearchPostParams },
       TContext
     >;
     request?: SecondParameter<typeof customInstance>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
-  Awaited<ReturnType<typeof searchKnowledgeApiKnowledgeSearchPost>>,
+  Awaited<ReturnType<typeof searchKnowledgeItemsApiKnowledgeSearchPost>>,
   TError,
-  { params: SearchKnowledgeApiKnowledgeSearchPostParams },
+  { params: SearchKnowledgeItemsApiKnowledgeSearchPostParams },
   TContext
 > => {
   const mutationOptions =
-    getSearchKnowledgeApiKnowledgeSearchPostMutationOptions(options);
+    getSearchKnowledgeItemsApiKnowledgeSearchPostMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

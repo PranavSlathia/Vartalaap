@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from datetime import UTC, datetime
 
@@ -30,7 +31,7 @@ class BusinessRepository:
     def get_by_phone_number(self, phone_number: str) -> Business | None:
         """Look up business by incoming phone number."""
         query = select(BusinessPhoneNumber).where(
-            BusinessPhoneNumber.phone_number == phone_number
+            BusinessPhoneNumber.phone_number == phone_number  # type: ignore[arg-type]
         )
         result = self.session.execute(query)
         mapping = result.scalar_one_or_none()
@@ -40,13 +41,13 @@ class BusinessRepository:
 
     def list_active(self) -> list[Business]:
         """List all active businesses."""
-        query = select(Business).where(Business.status == BusinessStatus.active)
+        query = select(Business).where(Business.status == BusinessStatus.active)  # type: ignore[arg-type]
         result = self.session.execute(query)
         return list(result.scalars().all())
 
     def list_all(self) -> list[Business]:
         """List all businesses."""
-        query = select(Business).order_by(Business.name)  # type: ignore[arg-type]
+        query = select(Business).order_by(Business.name)
         result = self.session.execute(query)
         return list(result.scalars().all())
 
@@ -89,7 +90,7 @@ class BusinessRepository:
     def get_phone_numbers(self, business_id: str) -> list[BusinessPhoneNumber]:
         """Get all phone numbers for a business."""
         query = select(BusinessPhoneNumber).where(
-            BusinessPhoneNumber.business_id == business_id
+            BusinessPhoneNumber.business_id == business_id  # type: ignore[arg-type]
         )
         result = self.session.execute(query)
         return list(result.scalars().all())
@@ -119,7 +120,7 @@ class AsyncBusinessRepository:
         should handle the call based on the "To" phone number.
         """
         query = select(BusinessPhoneNumber).where(
-            BusinessPhoneNumber.phone_number == phone_number
+            BusinessPhoneNumber.phone_number == phone_number  # type: ignore[arg-type]
         )
         result = await self.session.execute(query)
         mapping = result.scalar_one_or_none()
@@ -136,7 +137,7 @@ class AsyncBusinessRepository:
 
     async def list_active(self) -> list[Business]:
         """List all active businesses."""
-        query = select(Business).where(Business.status == BusinessStatus.active)
+        query = select(Business).where(Business.status == BusinessStatus.active)  # type: ignore[arg-type]
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
@@ -172,7 +173,7 @@ class AsyncBusinessRepository:
     async def get_phone_numbers(self, business_id: str) -> list[BusinessPhoneNumber]:
         """Get all phone numbers for a business."""
         query = select(BusinessPhoneNumber).where(
-            BusinessPhoneNumber.business_id == business_id
+            BusinessPhoneNumber.business_id == business_id  # type: ignore[arg-type]
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
@@ -183,17 +184,13 @@ def _business_to_config_dict(business: Business) -> dict:
     # Parse JSON fields
     operating_hours = {}
     if business.operating_hours_json:
-        try:
+        with contextlib.suppress(json.JSONDecodeError):
             operating_hours = json.loads(business.operating_hours_json)
-        except json.JSONDecodeError:
-            pass
 
     reservation_rules = {}
     if business.reservation_rules_json:
-        try:
+        with contextlib.suppress(json.JSONDecodeError):
             reservation_rules = json.loads(business.reservation_rules_json)
-        except json.JSONDecodeError:
-            pass
 
     return {
         "business": {
@@ -225,15 +222,15 @@ class KnowledgeItemRepository:
         active_only: bool = True,
     ) -> list[KnowledgeItem]:
         """List knowledge items for a business."""
-        query = select(KnowledgeItem).where(KnowledgeItem.business_id == business_id)
+        query = select(KnowledgeItem).where(KnowledgeItem.business_id == business_id)  # type: ignore[arg-type]
         if category:
-            query = query.where(KnowledgeItem.category == category)
+            query = query.where(KnowledgeItem.category == category)  # type: ignore[arg-type]
         if active_only:
-            query = query.where(KnowledgeItem.is_active == True)  # noqa: E712
+            query = query.where(KnowledgeItem.is_active == True)  # type: ignore[arg-type]  # noqa: E712
         query = query.order_by(
-            KnowledgeItem.category,  # type: ignore[arg-type]
-            KnowledgeItem.priority.desc(),  # type: ignore[union-attr]
-            KnowledgeItem.title,  # type: ignore[arg-type]
+            KnowledgeItem.category,
+            KnowledgeItem.priority.desc(),  # type: ignore[attr-defined]
+            KnowledgeItem.title,
         )
         result = self.session.execute(query)
         return list(result.scalars().all())
@@ -290,15 +287,15 @@ class AsyncKnowledgeItemRepository:
         active_only: bool = True,
     ) -> list[KnowledgeItem]:
         """List knowledge items for a business."""
-        query = select(KnowledgeItem).where(KnowledgeItem.business_id == business_id)
+        query = select(KnowledgeItem).where(KnowledgeItem.business_id == business_id)  # type: ignore[arg-type]
         if category:
-            query = query.where(KnowledgeItem.category == category)
+            query = query.where(KnowledgeItem.category == category)  # type: ignore[arg-type]
         if active_only:
-            query = query.where(KnowledgeItem.is_active == True)  # noqa: E712
+            query = query.where(KnowledgeItem.is_active == True)  # type: ignore[arg-type]  # noqa: E712
         query = query.order_by(
-            KnowledgeItem.category,  # type: ignore[arg-type]
-            KnowledgeItem.priority.desc(),  # type: ignore[union-attr]
-            KnowledgeItem.title,  # type: ignore[arg-type]
+            KnowledgeItem.category,
+            KnowledgeItem.priority.desc(),  # type: ignore[attr-defined]
+            KnowledgeItem.title,
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())
@@ -326,8 +323,8 @@ class AsyncKnowledgeItemRepository:
         """Get all active items that need embeddings generated."""
         query = (
             select(KnowledgeItem)
-            .where(KnowledgeItem.business_id == business_id)
-            .where(KnowledgeItem.is_active == True)  # noqa: E712
+            .where(KnowledgeItem.business_id == business_id)  # type: ignore[arg-type]
+            .where(KnowledgeItem.is_active == True)  # type: ignore[arg-type]  # noqa: E712
         )
         result = await self.session.execute(query)
         return list(result.scalars().all())

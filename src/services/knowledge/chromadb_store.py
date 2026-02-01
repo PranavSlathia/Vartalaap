@@ -6,6 +6,7 @@ Stores embeddings and metadata for similarity search.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 from typing import Any
@@ -107,10 +108,8 @@ class ChromaDBStore:
         # Parse metadata
         metadata_dict = {}
         if item.metadata_json:
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 metadata_dict = json.loads(item.metadata_json)
-            except json.JSONDecodeError:
-                pass
 
         # Store in ChromaDB
         collection.upsert(

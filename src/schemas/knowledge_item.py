@@ -46,7 +46,7 @@ class KnowledgeItem(BaseModel):
     metadata_json: Annotated[
         str | None,
         Field(
-            description='JSON object with category-specific metadata (price, is_vegetarian, keywords, etc.)'
+            description='JSON with category-specific metadata (price, keywords, etc.)'
         ),
     ] = None
     is_active: Annotated[

@@ -31,7 +31,7 @@ class Reservation(BaseModel):
     party_size: Annotated[int, Field(ge=1, le=20)]
     reservation_date: date
     reservation_time: Annotated[str, Field(pattern='^([01]?[0-9]|2[0-3]):[0-5][0-9]$')]
-    status: Status | None = 'confirmed'
+    status: Status | None = 'confirmed'  # type: ignore[assignment]
     whatsapp_sent: bool | None = False
     whatsapp_consent: bool | None = False
     notes: str | None = None

@@ -6,6 +6,7 @@ Only admins can access business settings for their authorized businesses.
 
 import re
 from datetime import UTC, datetime
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -193,7 +194,8 @@ def parse_json_field(json_str: str | None, default: dict | list) -> dict | list:
     try:
         import json
 
-        return json.loads(json_str)
+        result = json.loads(json_str)
+        return result  # type: ignore[no-any-return]
     except (json.JSONDecodeError, TypeError):
         return default
 
@@ -223,7 +225,7 @@ def business_to_response(business: Business) -> BusinessResponse:
         operating_hours=operating_hours if isinstance(operating_hours, dict) else {},
         reservation_rules=ReservationRules(**reservation_rules_dict)
         if isinstance(reservation_rules_dict, dict)
-        else ReservationRules(),
+        else ReservationRules(),  # type: ignore[call-arg]
         greeting_text=business.greeting_text,
         menu_summary=business.menu_summary,
     )
@@ -238,7 +240,7 @@ async def sync_phone_numbers(
     """
     # Delete existing phone numbers for this business
     await session.execute(
-        delete(BusinessPhoneNumber).where(BusinessPhoneNumber.business_id == business_id)
+        delete(BusinessPhoneNumber).where(BusinessPhoneNumber.business_id == business_id)  # type: ignore[arg-type]
     )
 
     # Add new phone numbers
@@ -319,7 +321,7 @@ async def update_business(
         await sync_phone_numbers(session, business_id, update.phone_numbers)
     if update.operating_hours is not None:
         # Convert OperatingHours to dict
-        hours_dict = {}
+        hours_dict: dict[str, Any] = {}
         for day, hours in update.operating_hours.items():
             if isinstance(hours, str):
                 hours_dict[day] = hours

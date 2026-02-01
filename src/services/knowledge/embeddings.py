@@ -72,7 +72,7 @@ class EmbeddingService:
             normalize_embeddings=True,  # L2 normalize for cosine similarity
             show_progress_bar=False,
         )
-        return embeddings
+        return embeddings  # type: ignore[no-any-return]
 
     async def encode_async(self, texts: list[str]) -> np.ndarray:
         """Encode texts to embeddings asynchronously.
@@ -88,12 +88,12 @@ class EmbeddingService:
         Returns a list for ChromaDB compatibility.
         """
         embeddings = self.encode([text])
-        return embeddings[0].tolist()
+        return embeddings[0].tolist()  # type: ignore[no-any-return]
 
     async def encode_single_async(self, text: str) -> list[float]:
         """Encode a single text asynchronously."""
         embeddings = await self.encode_async([text])
-        return embeddings[0].tolist()
+        return embeddings[0].tolist()  # type: ignore[no-any-return]
 
 
 @lru_cache(maxsize=1)

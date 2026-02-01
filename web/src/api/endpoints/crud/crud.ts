@@ -39,7 +39,7 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 /**
  * List reservations with optional filters.
 
-Security: business_id is required to prevent cross-tenant data access.
+Security: Requires JWT authentication. business_id must match authorized tenant.
  * @summary List Reservations
  */
 export const listReservationsApiReservationsGet = (
@@ -347,6 +347,8 @@ export function useListReservationsApiReservationsGetSuspense<
 
 /**
  * Create a new reservation.
+
+Security: Requires JWT authentication. Can only create reservations for authorized tenant.
  * @summary Create Reservation
  */
 export const createReservationApiReservationsPost = (
@@ -442,6 +444,8 @@ export const useCreateReservationApiReservationsPost = <
 };
 /**
  * Get a reservation by ID.
+
+Security: Requires JWT authentication. Reservation must belong to authorized tenant.
  * @summary Get Reservation
  */
 export const getReservationApiReservationsReservationIdGet = (
@@ -817,6 +821,8 @@ export function useGetReservationApiReservationsReservationIdGetSuspense<
 
 /**
  * Update a reservation (partial update).
+
+Security: Requires JWT authentication. Reservation must belong to authorized tenant.
  * @summary Update Reservation
  */
 export const updateReservationApiReservationsReservationIdPatch = (
@@ -928,6 +934,8 @@ export const useUpdateReservationApiReservationsReservationIdPatch = <
 };
 /**
  * Delete a reservation.
+
+Security: Requires JWT authentication. Reservation must belong to authorized tenant.
  * @summary Delete Reservation
  */
 export const deleteReservationApiReservationsReservationIdDelete = (

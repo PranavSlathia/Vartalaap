@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { RefreshCw, Loader2, Eye, Phone, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Loader2, Eye, Phone, Clock, CheckCircle, XCircle, AlertTriangle, Monitor } from 'lucide-react';
 import { useState } from 'react';
 import {
   useListCallLogsApiCallLogsGet,
@@ -184,6 +184,7 @@ export function CallLogs() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Source</TableHead>
                   <TableHead>Caller ID</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Language</TableHead>
@@ -195,8 +196,24 @@ export function CallLogs() {
               <TableBody>
                 {logs.map((log) => {
                   const OutcomeIcon = outcomeIcons[log.outcome || 'error'] || XCircle;
+                  const isVoiceTest = log.call_source === 'voice_test';
                   return (
                     <TableRow key={log.id}>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={isVoiceTest
+                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
+                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+                          }
+                        >
+                          {isVoiceTest ? (
+                            <><Monitor className="h-3 w-3 mr-1" />Test</>
+                          ) : (
+                            <><Phone className="h-3 w-3 mr-1" />Phone</>
+                          )}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
                         {maskCallerId(log.caller_id_hash)}
                       </TableCell>

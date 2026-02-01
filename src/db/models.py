@@ -141,6 +141,13 @@ class CallCategory(str, Enum):
     other = "other"
 
 
+class CallSource(str, Enum):
+    """Source of the call."""
+
+    phone = "phone"  # Real phone call via Plivo
+    voice_test = "voice_test"  # Browser-based voice test
+
+
 # =============================================================================
 # Database Models
 # =============================================================================
@@ -208,6 +215,11 @@ class CallLog(SQLModel, table=True):
     )
     call_category: CallCategory | None = Field(
         default=None, description="Call intent category"
+    )
+
+    # Call source tracking
+    call_source: CallSource = Field(
+        default=CallSource.phone, index=True, description="Source of the call"
     )
 
 
@@ -353,10 +365,10 @@ class Business(SQLModel, table=True):
 
         if not isinstance(data, dict):
             raise ValueError("operating_hours must be an object")
-        for day in data.keys():
+        for day in data:
             if day.lower() not in VALID_DAYS:
                 raise ValueError(f"Invalid day name: {day}")
-        return v
+        return str(v) if v is not None else None
 
     @field_validator("phone_numbers_json", mode="before")
     @classmethod
@@ -378,7 +390,7 @@ class Business(SQLModel, table=True):
         for phone in data:
             if not isinstance(phone, str) or not phone.startswith("+"):
                 raise ValueError(f"Invalid E.164 phone number: {phone}")
-        return v
+        return str(v) if v is not None else None
 
     @field_validator("reservation_rules_json", mode="before")
     @classmethod
@@ -404,7 +416,7 @@ class Business(SQLModel, table=True):
             raise ValueError("max_phone_party_size must be an integer")
         if "total_seats" in data and not isinstance(data["total_seats"], int):
             raise ValueError("total_seats must be an integer")
-        return v
+        return str(v) if v is not None else None
 
 
 class BusinessPhoneNumber(SQLModel, table=True):

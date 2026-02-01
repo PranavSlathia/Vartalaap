@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from crewai import Agent, Crew, LLM, Process, Task
+from crewai import LLM, Agent, Crew, Process, Task
 
 from src.config import get_settings
 from src.db.models import IssueCategory

@@ -426,7 +426,7 @@ class VoicePipeline:
                 collect_response(),
                 timeout=LLM_TIMEOUT,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"LLM timeout exceeded ({LLM_TIMEOUT}s)")
             response_parts = ["Maaf kijiye, thoda time lag raha hai. Kripya dobara bolein."]
         except Exception as e:
@@ -476,7 +476,7 @@ class VoicePipeline:
                 # Small yield to allow barge-in detection
                 await asyncio.sleep(0.001)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"TTS timeout exceeded ({TTS_TIMEOUT}s) for text: {text[:50]}...")
 
         except Exception as e:

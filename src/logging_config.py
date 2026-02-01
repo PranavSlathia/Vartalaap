@@ -8,8 +8,12 @@ Provides structured logging with:
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 
 def setup_logging(
@@ -84,7 +88,7 @@ def setup_logging(
     logger.info(f"Logging initialized at {level} level")
 
 
-def get_logger(name: str) -> "logger":  # type: ignore[valid-type]
+def get_logger(name: str) -> "Logger":
     """Get a logger instance with the given name.
 
     Usage:

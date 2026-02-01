@@ -6,11 +6,16 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { KnowledgeItemResponse } from "./knowledgeItemResponse";
+import type { KnowledgeSearchResultScore } from "./knowledgeSearchResultScore";
 
 /**
  * Search result with similarity score.
+
+When using vector search, score is a real similarity value (0.0-1.0).
+When falling back to keyword search, score is None.
  */
 export interface KnowledgeSearchResult {
   item: KnowledgeItemResponse;
-  score: number;
+  /** Similarity score (0.0-1.0) or null for keyword-only matches */
+  score?: KnowledgeSearchResultScore;
 }

@@ -37,7 +37,8 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 /**
  * Get business settings by ID.
 
-Requires X-Business-ID header matching the requested business_id.
+Requires JWT authentication and X-Business-ID header.
+User must have access to the requested business.
  * @summary Get Business
  */
 export const getBusinessApiBusinessBusinessIdGet = (
@@ -353,7 +354,8 @@ export function useGetBusinessApiBusinessBusinessIdGetSuspense<
 /**
  * Update business settings.
 
-Requires X-Business-ID header matching the requested business_id.
+Requires JWT authentication and X-Business-ID header.
+User must have access to the requested business.
  * @summary Update Business
  */
 export const updateBusinessApiBusinessBusinessIdPatch = (

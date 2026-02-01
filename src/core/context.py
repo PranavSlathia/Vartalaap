@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -26,8 +28,8 @@ class ConversationManager:
     max_history: int = 10  # Keep last N turns for context window
 
     _business_config: dict | None = field(default=None, init=False, repr=False)
-    _business_db: "Business | None" = field(default=None, init=False, repr=False)
-    _retrieved_knowledge: "KnowledgeResult | None" = field(default=None, init=False, repr=False)
+    _business_db: Business | None = field(default=None, init=False, repr=False)
+    _retrieved_knowledge: KnowledgeResult | None = field(default=None, init=False, repr=False)
 
     def add_user_message(self, content: str) -> Message:
         """Add a user message to history."""
@@ -48,14 +50,14 @@ class ConversationManager:
         if len(self.messages) > self.max_history:
             self.messages = self.messages[-self.max_history :]
 
-    def set_business(self, business: "Business") -> None:
+    def set_business(self, business: Business) -> None:
         """Set database Business object for config.
 
         When set, database config takes precedence over YAML.
         """
         self._business_db = business
 
-    def set_retrieved_knowledge(self, knowledge: "KnowledgeResult") -> None:
+    def set_retrieved_knowledge(self, knowledge: KnowledgeResult) -> None:
         """Set retrieved knowledge for LLM context injection."""
         self._retrieved_knowledge = knowledge
 
@@ -114,8 +116,6 @@ class ConversationManager:
         caller_history: str | None = None,
     ) -> ConversationContext:
         """Build context from database Business object."""
-        import json
-
         business = self._business_db
         assert business is not None
 
@@ -129,17 +129,13 @@ class ConversationManager:
         # Parse JSON fields
         operating_hours = {}
         if business.operating_hours_json:
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 operating_hours = json.loads(business.operating_hours_json)
-            except json.JSONDecodeError:
-                pass
 
         reservation_rules = {}
         if business.reservation_rules_json:
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 reservation_rules = json.loads(business.reservation_rules_json)
-            except json.JSONDecodeError:
-                pass
 
         # Load prompt template and few-shot examples
         prompt_template = self._load_prompt_template()

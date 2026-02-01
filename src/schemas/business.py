@@ -39,7 +39,7 @@ class Business(BaseModel):
         str | None, Field(description='IANA timezone (e.g., Asia/Kolkata)')
     ] = 'Asia/Kolkata'
     status: Annotated[Status | None, Field(description='Business account status')] = (
-        'onboarding'
+        'onboarding'  # type: ignore[assignment]
     )
     phone_numbers_json: Annotated[
         str | None, Field(description='JSON array of phone numbers in E.164 format')
@@ -47,13 +47,13 @@ class Business(BaseModel):
     operating_hours_json: Annotated[
         str | None,
         Field(
-            description='JSON object mapping day names to hours (e.g., {"monday": "closed", "tuesday": "11:00-22:30"})'
+            description='JSON mapping day names to hours (e.g., {"monday": "closed"})'
         ),
     ] = None
     reservation_rules_json: Annotated[
         str | None,
         Field(
-            description='JSON object with reservation rules (min_party_size, max_phone_party_size, total_seats, etc.)'
+            description='JSON with reservation rules (min/max party size, total_seats)'
         ),
     ] = None
     greeting_text: Annotated[

@@ -7,7 +7,7 @@
  */
 import type { KnowledgeCategory } from "./knowledgeCategory";
 
-export type SearchKnowledgeApiKnowledgeSearchPostParams = {
+export type SearchKnowledgeItemsApiKnowledgeSearchPostParams = {
   /**
    * @minLength 1
    * @maxLength 500

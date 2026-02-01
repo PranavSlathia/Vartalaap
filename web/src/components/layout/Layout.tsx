@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   CalendarCheck,
   PhoneCall,
+  Star,
   Settings,
   LogOut,
   Mic,
@@ -35,6 +36,7 @@ const mainNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Reservations', href: '/reservations', icon: CalendarCheck },
   { name: 'Call Logs', href: '/call-logs', icon: PhoneCall },
+  { name: 'Reviews', href: '/reviews', icon: Star },
 ];
 
 const knowledgeNavigation = [

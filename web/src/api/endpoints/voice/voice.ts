@@ -25,6 +25,8 @@ import type {
 
 import type {
   BodyProcessVoiceApiVoiceProcessPost,
+  EndSessionRequest,
+  EndSessionResponse,
   HTTPValidationError,
   TextToSpeechApiVoiceTtsPostBody,
 } from "../../model";
@@ -539,6 +541,108 @@ export const useTextToSpeechApiVoiceTtsPost = <
 > => {
   const mutationOptions =
     getTextToSpeechApiVoiceTtsPostMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
+ * End a voice test session and persist call log.
+
+This endpoint:
+1. Creates a CallLog entry with call_source='voice_test'
+2. Queues the analyze_transcript_quality background job
+3. Cleans up the in-memory session
+
+Returns the call_log_id for tracking.
+ * @summary End Session
+ */
+export const endSessionApiVoiceEndSessionPost = (
+  endSessionRequest: BodyType<EndSessionRequest>,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal,
+) => {
+  return customInstance<EndSessionResponse>(
+    {
+      url: `/api/voice/end-session`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: endSessionRequest,
+      signal,
+    },
+    options,
+  );
+};
+
+export const getEndSessionApiVoiceEndSessionPostMutationOptions = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof endSessionApiVoiceEndSessionPost>>,
+    TError,
+    { data: BodyType<EndSessionRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof endSessionApiVoiceEndSessionPost>>,
+  TError,
+  { data: BodyType<EndSessionRequest> },
+  TContext
+> => {
+  const mutationKey = ["endSessionApiVoiceEndSessionPost"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof endSessionApiVoiceEndSessionPost>>,
+    { data: BodyType<EndSessionRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return endSessionApiVoiceEndSessionPost(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EndSessionApiVoiceEndSessionPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof endSessionApiVoiceEndSessionPost>>
+>;
+export type EndSessionApiVoiceEndSessionPostMutationBody =
+  BodyType<EndSessionRequest>;
+export type EndSessionApiVoiceEndSessionPostMutationError =
+  ErrorType<HTTPValidationError>;
+
+/**
+ * @summary End Session
+ */
+export const useEndSessionApiVoiceEndSessionPost = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof endSessionApiVoiceEndSessionPost>>,
+      TError,
+      { data: BodyType<EndSessionRequest> },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof endSessionApiVoiceEndSessionPost>>,
+  TError,
+  { data: BodyType<EndSessionRequest> },
+  TContext
+> => {
+  const mutationOptions =
+    getEndSessionApiVoiceEndSessionPostMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
 };

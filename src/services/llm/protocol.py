@@ -44,7 +44,7 @@ class ConversationContext:
     caller_history: str | None = None
     prompt_template: str | None = None  # Custom prompt template from config
     few_shot_examples: list[dict[str, str]] = field(default_factory=list)
-    retrieved_knowledge: "KnowledgeResult | None" = None  # RAG results
+    retrieved_knowledge: KnowledgeResult | None = None  # RAG results
 
 
 @dataclass

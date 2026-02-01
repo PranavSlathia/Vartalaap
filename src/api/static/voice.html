@@ -322,7 +322,7 @@
             }
         }
 
-        function stopConversation() {
+        async function stopConversation() {
             isActive = false;
             stopListening();
             audioPlayer.pause();
@@ -331,7 +331,26 @@
             }
             setIdleState();
             toggleBtn.textContent = 'Start Call';
-            status.textContent = 'Call ended. Click to restart.';
+            status.textContent = 'Saving call log...';
+
+            // End session on server to persist call log and trigger analysis
+            try {
+                const response = await fetch('/api/voice/end-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId }),
+                });
+                const data = await response.json();
+                if (data.call_log_id) {
+                    status.textContent = `Call saved. ID: ${data.call_log_id.slice(0, 8)}...`;
+                    console.log('Call log created:', data);
+                } else {
+                    status.textContent = 'Call ended. Click to restart.';
+                }
+            } catch (err) {
+                console.error('Failed to save call log:', err);
+                status.textContent = 'Call ended. Click to restart.';
+            }
         }
 
         function resetConversation() {

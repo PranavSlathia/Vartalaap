@@ -16,6 +16,7 @@ from src.db.models import (
     CallCategory,
     CallLog,
     CallOutcome,
+    CallSource,
     ConsentType,
     DetectedLanguage,
     RatingMethod,
@@ -61,6 +62,9 @@ class CallLogResponse(BaseModel):
     # Summary
     call_summary: str | None = None
     call_category: CallCategory | None = None
+
+    # Source tracking
+    call_source: CallSource = CallSource.phone
 
     model_config = {"from_attributes": True}
 
@@ -108,11 +112,11 @@ async def list_call_logs(
     if outcome:
         query = query.where(CallLog.outcome == outcome)  # type: ignore[arg-type]
     if date_from:
-        query = query.where(CallLog.call_start >= date_from.isoformat())  # type: ignore[arg-type]
+        query = query.where(CallLog.call_start >= date_from.isoformat())  # type: ignore[operator]
     if date_to:
-        query = query.where(CallLog.call_start <= f"{date_to.isoformat()}T23:59:59")  # type: ignore[arg-type]
+        query = query.where(CallLog.call_start <= f"{date_to.isoformat()}T23:59:59")  # type: ignore[operator]
 
-    query = query.offset(skip).limit(limit).order_by(desc(CallLog.call_start))
+    query = query.offset(skip).limit(limit).order_by(desc(CallLog.call_start))  # type: ignore[arg-type]
 
     result = await session.execute(query)
     logs = result.scalars().all()
@@ -141,6 +145,7 @@ async def list_call_logs(
             rating_method=log.rating_method,
             call_summary=log.call_summary,
             call_category=log.call_category,
+            call_source=log.call_source,
         )
         for log in logs
     ]
@@ -169,9 +174,9 @@ async def get_call_log_summary(
     # Required: always scope by business_id
     base_query = base_query.where(CallLog.business_id == business_id)  # type: ignore[arg-type]
     if date_from:
-        base_query = base_query.where(CallLog.call_start >= date_from.isoformat())  # type: ignore[arg-type]
+        base_query = base_query.where(CallLog.call_start >= date_from.isoformat())  # type: ignore[operator]
     if date_to:
-        base_query = base_query.where(CallLog.call_start <= f"{date_to.isoformat()}T23:59:59")  # type: ignore[arg-type]
+        base_query = base_query.where(CallLog.call_start <= f"{date_to.isoformat()}T23:59:59")  # type: ignore[operator]
 
     # Get all matching logs
     result = await session.execute(base_query)
@@ -251,6 +256,7 @@ async def get_call_log(
         rating_method=log.rating_method,
         call_summary=log.call_summary,
         call_category=log.call_category,
+        call_source=log.call_source,
     )
 
 
@@ -315,4 +321,5 @@ async def rate_call(
         rating_method=log.rating_method,
         call_summary=log.call_summary,
         call_category=log.call_category,
+        call_source=log.call_source,
     )
