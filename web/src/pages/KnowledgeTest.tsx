@@ -8,7 +8,7 @@ import { Search, RefreshCw, Play, Info, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   useListKnowledgeItemsApiKnowledgeGet,
-  useSearchKnowledgeApiKnowledgeSearchPost,
+  useSearchKnowledgeItemsApiKnowledgeSearchPost,
 } from '@/api/endpoints/knowledge/knowledge';
 import type { KnowledgeCategory } from '@/api/model';
 import { getBusinessId } from '@/lib/business';
@@ -43,7 +43,7 @@ export function KnowledgeTest() {
   });
 
   // Search mutation
-  const searchMutation = useSearchKnowledgeApiKnowledgeSearchPost();
+  const searchMutation = useSearchKnowledgeItemsApiKnowledgeSearchPost();
 
   const handleSearch = async () => {
     if (!query.trim()) return;

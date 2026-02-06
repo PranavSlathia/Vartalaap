@@ -96,7 +96,7 @@ def parse_metadata(
     except Exception:
         pass
 
-    # Return raw data if validation fails (for backwards compat)
+    # Return dict data as-is if validation fails; discard non-dict metadata
     return dict(data) if isinstance(data, dict) else {}
 
 

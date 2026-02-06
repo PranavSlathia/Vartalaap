@@ -2,11 +2,37 @@
 
 from __future__ import annotations
 
+import pytest
+
+from src.db.models import Business, BusinessStatus, BusinessType
+
+
+@pytest.fixture
+def mock_business_phone_mapping(monkeypatch) -> None:
+    """Mock phone-to-business routing for answer webhook tests."""
+
+    async def mock_get_by_phone_number(_, phone_number: str):
+        if phone_number != "+918888888888":
+            return None
+        return Business(
+            id="himalayan_kitchen",
+            name="Himalayan Kitchen",
+            type=BusinessType.restaurant,
+            status=BusinessStatus.active,
+            timezone="Asia/Kolkata",
+            greeting_text="Namaste! Himalayan Kitchen mein aapka swagat hai.",
+        )
+
+    monkeypatch.setattr(
+        "src.db.repositories.businesses.AsyncBusinessRepository.get_by_phone_number",
+        mock_get_by_phone_number,
+    )
+
 
 class TestPlivoAnswerWebhook:
     """Tests for POST /api/plivo/webhook/answer."""
 
-    def test_answer_webhook_returns_xml(self, test_client) -> None:
+    def test_answer_webhook_returns_xml(self, test_client, mock_business_phone_mapping) -> None:
         """Test answer webhook returns XML with Stream element."""
         form_data = {
             "CallUUID": "test-uuid-123",
@@ -23,7 +49,9 @@ class TestPlivoAnswerWebhook:
         assert "<Stream" in response.text
         assert "bidirectional" in response.text
 
-    def test_answer_webhook_includes_websocket_url(self, test_client) -> None:
+    def test_answer_webhook_includes_websocket_url(
+        self, test_client, mock_business_phone_mapping
+    ) -> None:
         """Test answer webhook XML contains websocket URL."""
         form_data = {
             "CallUUID": "test-call-456",
@@ -50,6 +78,7 @@ class TestPlivoAnswerWebhook:
 
         assert response.status_code == 200
         assert "application/xml" in response.headers["content-type"]
+        assert "<Hangup" in response.text
 
 
 class TestPlivoHangupWebhook:

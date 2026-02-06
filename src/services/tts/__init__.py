@@ -6,6 +6,7 @@ Provides TTS capabilities for the voice bot:
 """
 
 from src.services.tts.edge import EdgeTTSService
+from src.services.tts.elevenlabs import ElevenLabsTTSService
 from src.services.tts.exceptions import (
     TTSConnectionError,
     TTSModelNotFoundError,
@@ -21,6 +22,7 @@ __all__ = [
     # Services
     "PiperTTSService",
     "EdgeTTSService",
+    "ElevenLabsTTSService",
     # Protocol
     "TTSService",
     # Data types

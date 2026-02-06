@@ -18,7 +18,7 @@ from src.db.repositories.businesses import AsyncBusinessRepository
 from src.db.repositories.calls import AsyncCallLogRepository
 from src.db.session import get_session_context
 from src.logging_config import get_logger
-from src.security.crypto import hash_phone_for_dedup
+from src.security.crypto import encrypt_phone, hash_phone_for_dedup
 from src.services.telephony.plivo import PlivoCallInfo, PlivoService
 
 router = APIRouter(prefix="/plivo", tags=["Plivo"])
@@ -63,11 +63,13 @@ async def plivo_answer_webhook(
 
     # Hash caller phone for privacy (never log raw number)
     caller_id_hash = None
+    caller_phone_encrypted = None
     if call_info.from_number:
         try:
             caller_id_hash = hash_phone_for_dedup(call_info.from_number)
+            caller_phone_encrypted = encrypt_phone(call_info.from_number)
         except Exception as e:
-            logger.warning(f"Failed to hash caller ID: {e}")
+            logger.warning(f"Failed to process caller phone fields: {e}")
 
     # Resolve business from "To" phone number
     # SECURITY: Do NOT default to any business - fail safely if unknown
@@ -106,6 +108,7 @@ async def plivo_answer_webhook(
             call_info.call_uuid,
             business_id=business_id,
             caller_id_hash=caller_id_hash,
+            caller_phone_encrypted=caller_phone_encrypted,
             greeting_text=greeting_text,
             settings=settings,
         )

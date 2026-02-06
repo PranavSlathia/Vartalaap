@@ -111,6 +111,13 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_ignores = true
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not external'"
+markers = [
+    "external: requires external network or third-party APIs",
+]
+
 [dependency-groups]
 dev = [
     "mypy>=1.19.1",

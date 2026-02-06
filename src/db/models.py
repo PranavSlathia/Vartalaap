@@ -339,6 +339,20 @@ class Business(SQLModel, table=True):
     greeting_text: str | None = Field(
         default=None, max_length=500, description="Custom greeting for voice calls"
     )
+    voice_profile_json: str | None = Field(
+        default=None,
+        description=(
+            "JSON object with voice settings such as provider, voice_id, "
+            "model, and style"
+        ),
+    )
+    rag_profile_json: str | None = Field(
+        default=None,
+        description=(
+            "JSON object with retrieval settings such as enabled flag, "
+            "max_results, and min_score"
+        ),
+    )
     menu_summary: str | None = Field(
         default=None, max_length=2000, description="Brief menu/service summary for LLM"
     )
@@ -416,6 +430,25 @@ class Business(SQLModel, table=True):
             raise ValueError("max_phone_party_size must be an integer")
         if "total_seats" in data and not isinstance(data["total_seats"], int):
             raise ValueError("total_seats must be an integer")
+        return str(v) if v is not None else None
+
+    @field_validator("voice_profile_json", "rag_profile_json", mode="before")
+    @classmethod
+    def validate_profile_json(cls, v: Any) -> str | None:
+        """Validate profile fields are JSON objects when present."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                data = json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON: {e}") from e
+        else:
+            data = v
+            v = json.dumps(v)
+
+        if not isinstance(data, dict):
+            raise ValueError("profile configuration must be a JSON object")
         return str(v) if v is not None else None
 
 

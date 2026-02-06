@@ -19,9 +19,15 @@ from typing import TYPE_CHECKING, Any, Protocol
 from src.config import Settings, get_settings
 from src.core.session import CallSession
 from src.logging_config import get_logger
-from src.observability.metrics import ACTIVE_CALLS, record_call_metrics
+from src.observability.metrics import (
+    ACTIVE_CALLS,
+    record_call_metrics,
+    record_followup_missing_phone,
+)
 from src.services.stt.protocol import TranscriptChunk
 from src.services.telephony.plivo import is_speech
+from src.services.tts.edge import EdgeTTSService
+from src.services.tts.elevenlabs import ElevenLabsTTSService
 from src.services.tts.piper import PiperTTSService
 
 if TYPE_CHECKING:
@@ -231,8 +237,9 @@ class VoicePipeline:
         self._state = PipelineState.IDLE
         self._state_lock = asyncio.Lock()
 
-        # TTS service (use existing session's STT, create own TTS)
-        self._tts = PiperTTSService(settings=self._settings)
+        # TTS services (provider selected per business voice profile at runtime)
+        self._tts_services: dict[str, Any] = {}
+        self._active_tts_service: Any | None = None
 
         # Audio handling
         self._audio_buffer = AudioBuffer()
@@ -258,6 +265,86 @@ class VoicePipeline:
         """Pipeline metrics."""
         return self._metrics
 
+    def _resolve_tts_provider_order(self) -> list[str]:
+        """Resolve provider priority from business profile and global settings."""
+        profile = self._session.voice_profile
+        preferred = str(profile.get("provider", self._settings.tts_provider)).lower()
+        edge_enabled = bool(self._settings.edge_tts_enabled)
+
+        if preferred == "elevenlabs":
+            order = ["elevenlabs", "piper"]
+            if edge_enabled:
+                order.append("edge")
+            return order
+        if preferred == "piper":
+            order = ["piper"]
+            if edge_enabled:
+                order.append("edge")
+            return order
+        if preferred == "edge":
+            order = ["edge", "piper"]
+            if self._settings.elevenlabs_api_key:
+                order.insert(1, "elevenlabs")
+            return order
+
+        # Auto mode: quality first when key exists, then local fallback.
+        order: list[str] = []
+        if self._settings.elevenlabs_api_key:
+            order.append("elevenlabs")
+        order.append("piper")
+        if edge_enabled:
+            order.append("edge")
+        return order
+
+    def _tts_service_cache_key(self, provider: str) -> str:
+        """Build cache key so profile changes are reflected without restart."""
+        profile = self._session.voice_profile
+        if provider == "elevenlabs":
+            voice_id = str(profile.get("voice_id") or self._settings.elevenlabs_voice_id)
+            model_id = str(profile.get("model_id") or self._settings.elevenlabs_model_id)
+            return f"{provider}:{voice_id}:{model_id}"
+        if provider == "piper":
+            voice_name = str(profile.get("piper_voice") or self._settings.piper_voice)
+            return f"{provider}:{voice_name}"
+        if provider == "edge":
+            edge_voice = str(profile.get("edge_voice") or self._settings.edge_tts_voice)
+            return f"{provider}:{edge_voice}"
+        return provider
+
+    def _get_tts_service(self, provider: str) -> Any:
+        """Get or create a TTS service instance for provider."""
+        cache_key = self._tts_service_cache_key(provider)
+        if cache_key in self._tts_services:
+            return self._tts_services[cache_key]
+
+        service: Any
+        if provider == "elevenlabs":
+            profile = self._session.voice_profile
+            service = ElevenLabsTTSService(
+                settings=self._settings,
+                voice_id=str(profile.get("voice_id") or self._settings.elevenlabs_voice_id),
+                model_id=str(profile.get("model_id") or self._settings.elevenlabs_model_id),
+            )
+        elif provider == "piper":
+            profile = self._session.voice_profile
+            piper_voice = profile.get("piper_voice")
+            service = PiperTTSService(
+                settings=self._settings,
+                voice_name=str(piper_voice) if piper_voice else None,
+            )
+        elif provider == "edge":
+            profile = self._session.voice_profile
+            edge_voice = profile.get("edge_voice")
+            service = EdgeTTSService(
+                settings=self._settings,
+                voice=str(edge_voice) if edge_voice else None,
+            )
+        else:
+            raise ValueError(f"Unsupported TTS provider: {provider}")
+
+        self._tts_services[cache_key] = service
+        return service
+
     async def configure(
         self,
         input_sample_rate: int | None = None,
@@ -275,6 +362,12 @@ class VoicePipeline:
         if input_encoding:
             self._config.input_encoding = input_encoding
 
+        # Prefer 16k output when stream supports it, degrade to 8k on narrowband legs.
+        if self._config.input_sample_rate <= 8000:
+            self._config.output_sample_rate = 8000
+        elif self._config.input_sample_rate >= 16000:
+            self._config.output_sample_rate = max(self._config.output_sample_rate, 16000)
+
         logger.info(
             f"Pipeline configured: {self._config.input_sample_rate}Hz "
             f"{self._config.input_encoding} → {self._config.output_sample_rate}Hz"
@@ -282,8 +375,10 @@ class VoicePipeline:
 
     async def send_greeting(self, sender: AudioSender) -> None:
         """Send initial greeting when call connects."""
+        await self._session.load_business_context()
         logger.info(f"Sending greeting for call {self._session.call_id}")
-        await self._speak(self._config.greeting_text, sender)
+        greeting = self._session.greeting_text or self._config.greeting_text
+        await self._speak(greeting, sender)
 
     async def process_audio_chunk(
         self,
@@ -331,7 +426,8 @@ class VoicePipeline:
 
         # Signal TTS cancellation
         self._tts_cancel_event.set()
-        self._tts.cancel()
+        if self._active_tts_service and hasattr(self._active_tts_service, "cancel"):
+            self._active_tts_service.cancel()
 
         # Clear Plivo audio buffer
         await sender.clear_audio()
@@ -434,6 +530,7 @@ class VoicePipeline:
             response_parts = ["Sorry, I'm having trouble. Please try again."]
 
         full_response = "".join(response_parts)
+        full_response = self._session.normalize_response_text(full_response)
 
         if full_response:
             await self._speak(full_response, sender)
@@ -449,40 +546,67 @@ class VoicePipeline:
         await self._set_state(PipelineState.SPEAKING)
 
         try:
-            # TTS synthesis with timeout
-            generator, metadata = await asyncio.wait_for(
-                self._tts.synthesize_stream(
-                    text,
-                    target_sample_rate=self._config.output_sample_rate,
-                ),
-                timeout=TTS_TIMEOUT,
-            )
+            providers = self._resolve_tts_provider_order()
+            last_error: Exception | None = None
 
-            if metadata.first_chunk_ms:
-                self._metrics.tts_first_chunk_ms.append(metadata.first_chunk_ms)
+            for provider in providers:
+                service = self._get_tts_service(provider)
+                self._active_tts_service = service
+                sent_any_audio = False
 
-            async for chunk in generator:
-                # Check for cancellation (barge-in)
-                if self._tts_cancel_event.is_set():
-                    logger.debug("TTS cancelled due to barge-in")
+                try:
+                    generator, metadata = await asyncio.wait_for(
+                        service.synthesize_stream(
+                            text,
+                            target_sample_rate=self._config.output_sample_rate,
+                        ),
+                        timeout=TTS_TIMEOUT,
+                    )
+
+                    if metadata.first_chunk_ms:
+                        self._metrics.tts_first_chunk_ms.append(metadata.first_chunk_ms)
+
+                    async for chunk in generator:
+                        # Check for cancellation (barge-in)
+                        if self._tts_cancel_event.is_set():
+                            logger.debug("TTS cancelled due to barge-in")
+                            break
+
+                        audio_bytes = chunk.audio_bytes
+                        self._metrics.total_audio_sent_bytes += len(audio_bytes)
+
+                        # Send to caller
+                        await sender.send_audio(audio_bytes)
+                        sent_any_audio = True
+
+                        # Small yield to allow barge-in detection
+                        await asyncio.sleep(0.001)
+
+                    # Success path
+                    last_error = None
                     break
 
-                audio_bytes = chunk.audio_bytes
-                self._metrics.total_audio_sent_bytes += len(audio_bytes)
+                except TimeoutError as e:
+                    last_error = e
+                    logger.warning(
+                        f"TTS timeout ({provider}) exceeded ({TTS_TIMEOUT}s): {text[:50]}..."
+                    )
+                    if sent_any_audio:
+                        break
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"TTS provider failed ({provider}): {e}")
+                    if sent_any_audio:
+                        break
 
-                # Send to caller
-                await sender.send_audio(audio_bytes)
-
-                # Small yield to allow barge-in detection
-                await asyncio.sleep(0.001)
-
-        except TimeoutError:
-            logger.error(f"TTS timeout exceeded ({TTS_TIMEOUT}s) for text: {text[:50]}...")
-
-        except Exception as e:
-            logger.error(f"TTS error: {e}")
+            if last_error:
+                logger.error(
+                    "All TTS providers failed for call "
+                    f"{self._session.call_id}: {last_error}"
+                )
 
         finally:
+            self._active_tts_service = None
             if self._state == PipelineState.SPEAKING:
                 await self._set_state(PipelineState.IDLE)
 
@@ -548,12 +672,21 @@ class VoicePipeline:
             from src.db.repositories.calls import AsyncCallLogRepository
             from src.db.session import get_session_context
 
+            encrypted_phone = self._session.caller_phone_encrypted
+            if not encrypted_phone:
+                record_followup_missing_phone(self._session.business_id)
+                logger.warning(
+                    f"Skipping operator followup for call {self._session.call_id}: "
+                    "missing encrypted caller phone"
+                )
+                return
+
             async with get_session_context() as db_session:
                 repo = AsyncCallLogRepository(db_session)
                 transcript_excerpt = self._session.get_transcript()[:200]
                 await repo.create_followup(
                     business_id=self._session.business_id,
-                    customer_phone_encrypted=self._session.caller_phone_encrypted or "",
+                    customer_phone_encrypted=encrypted_phone,
                     reason="callback_request",
                     summary=f"Operator transfer requested. Transcript: {transcript_excerpt}",
                     call_log_id=self._session.call_id,
@@ -581,8 +714,11 @@ class VoicePipeline:
         # Close audio buffer
         self._audio_buffer.close()
 
-        # Close TTS
-        await self._tts.close()
+        # Close TTS services
+        for service in self._tts_services.values():
+            with contextlib.suppress(Exception):
+                await service.close()
+        self._tts_services.clear()
 
         # Close session
         await self._session.close()

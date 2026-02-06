@@ -37,6 +37,7 @@ GROQ_FREE_TIER_RPM = 30  # Requests per minute
 
 # RAG injection limits - prevent prompt explosion
 MAX_KNOWLEDGE_TOKENS = 500  # ~375 words, fits within P50 latency budget
+BOOKING_BUSINESS_TYPES = {"restaurant", "clinic", "salon"}
 
 
 class GroqService:
@@ -257,6 +258,8 @@ class GroqService:
 
     def _build_system_prompt(self, context: ConversationContext) -> str:
         """Build system prompt with injected context."""
+        supports_bookings = context.business_type in BOOKING_BUSINESS_TYPES
+
         # Format operating hours
         hours_lines = []
         for day, hours in context.operating_hours.items():
@@ -274,11 +277,20 @@ class GroqService:
 
 ## Operating Hours
 {hours_text}
+"""
 
-## Reservation Rules
+        if supports_bookings:
+            prompt += f"""
+## Booking Rules
 - Minimum party size: {context.reservation_rules.get('min_party_size', 1)}
 - Maximum party size (phone): {context.reservation_rules.get('max_phone_party_size', 10)} people
 - Total capacity: {context.reservation_rules.get('total_seats', 40)} seats
+"""
+        else:
+            prompt += """
+## Service Rules
+- Use uploaded knowledge as the source of truth for services, pricing, and policies.
+- If a request needs staff action, offer escalation politely.
 """
 
         if context.current_capacity is not None:
@@ -344,10 +356,19 @@ class GroqService:
 - Use natural, conversational language
 - Adapt to Hindi, English, or Hinglish based on caller's language
 - For Hindi speakers, use polite forms ("ji", "aap")
-- Always confirm reservation details before finalizing (date, time, party size, name)
-- Do not accept delivery orders - politely redirect to Zomato/Swiggy
-- For large parties (>10), redirect to WhatsApp
-- If unsure about availability, offer to check and call back via WhatsApp
+- Avoid repetitive templates; vary phrasing naturally
+"""
+
+            if supports_bookings:
+                prompt += """
+- Confirm booking details before finalizing (date, time, party size, name)
+- For large groups above phone limits, redirect politely to staff/WhatsApp
+- If unsure about availability, offer to check and call back
+"""
+            else:
+                prompt += """
+- Focus on FAQ/menu/service-policy answers from retrieved knowledge
+- If information is missing, say it clearly and offer escalation
 """
 
         # Add few-shot examples if available

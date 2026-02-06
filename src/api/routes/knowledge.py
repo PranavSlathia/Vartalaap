@@ -5,11 +5,14 @@ Security: All endpoints require JWT authentication and tenant authorization.
 """
 
 import contextlib
+import csv
+import io
+import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,9 +95,70 @@ class KnowledgeSearchResult(BaseModel):
     )
 
 
+class KnowledgeUploadResponse(BaseModel):
+    """Bulk upload response summary."""
+
+    business_id: str
+    created_count: int
+    indexed_count: int
+    error_count: int
+    errors: list[str]
+
+
+class KnowledgeReindexResponse(BaseModel):
+    """Reindex operation response."""
+
+    business_id: str
+    indexed_count: int
+
+
+class KnowledgeStatsResponse(BaseModel):
+    """Knowledge/index stats for a business."""
+
+    business_id: str
+    total_items: int
+    active_items: int
+    indexed_items: int
+    chromadb_count: int
+    category_counts: dict[str, int]
+
+
 # =============================================================================
 # CRUD Endpoints
 # =============================================================================
+
+
+def _parse_upload_bool(value: str | None, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _parse_upload_records(filename: str, payload: bytes) -> list[dict[str, Any]]:
+    """Parse uploaded CSV/JSON payload into record dicts."""
+    lower_name = filename.lower()
+    if lower_name.endswith(".json"):
+        decoded = json.loads(payload.decode("utf-8"))
+        if isinstance(decoded, dict) and isinstance(decoded.get("items"), list):
+            decoded = decoded["items"]
+        if not isinstance(decoded, list):
+            raise ValueError("JSON payload must be an array or {'items': [...]} object")
+        return [dict(item) for item in decoded if isinstance(item, dict)]
+
+    if lower_name.endswith(".csv"):
+        text = payload.decode("utf-8")
+        reader = csv.DictReader(io.StringIO(text))
+        return [dict(row) for row in reader]
+
+    raise ValueError("Unsupported file type. Use .csv or .json")
+
+
+def _coerce_category(value: Any) -> KnowledgeCategory:
+    if isinstance(value, KnowledgeCategory):
+        return value
+    if not value:
+        return KnowledgeCategory.faq
+    return KnowledgeCategory(str(value))
 
 
 @router.get("", response_model=list[KnowledgeItemResponse])
@@ -150,6 +214,171 @@ async def list_knowledge_items(
         )
         for item in items
     ]
+
+
+@router.post("/upload", response_model=KnowledgeUploadResponse, status_code=201)
+async def upload_knowledge_items(
+    auth_business_id: RequireBusinessAccess,
+    business_id: str = Form(...),
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session),
+) -> KnowledgeUploadResponse:
+    """Bulk upload knowledge items from CSV or JSON."""
+    if business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to upload for business '{business_id}'",
+        )
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Uploaded file must include a filename")
+
+    payload = await file.read()
+    try:
+        records = _parse_upload_records(file.filename, payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    now = datetime.now(UTC)
+    created_items: list[KnowledgeItem] = []
+    errors: list[str] = []
+
+    for index, raw in enumerate(records, start=1):
+        try:
+            category = _coerce_category(raw.get("category"))
+            title = str(raw.get("title") or "").strip()
+            content = str(raw.get("content") or "").strip()
+            if not title or not content:
+                raise ValueError("title and content are required")
+
+            priority = int(raw.get("priority") or 50)
+            priority = max(0, min(100, priority))
+            is_active = _parse_upload_bool(raw.get("is_active"), True)
+
+            metadata_value = raw.get("metadata_json")
+            metadata_json: str | None = None
+            if isinstance(metadata_value, dict):
+                metadata_json = json.dumps(metadata_value)
+            elif isinstance(metadata_value, str) and metadata_value.strip():
+                metadata_json = metadata_value
+
+            item = KnowledgeItem(
+                id=str(uuid4()),
+                business_id=business_id,
+                category=category,
+                title=title,
+                title_hindi=(
+                    str(raw.get("title_hindi")).strip() if raw.get("title_hindi") else None
+                ),
+                content=content,
+                content_hindi=(
+                    str(raw.get("content_hindi")).strip() if raw.get("content_hindi") else None
+                ),
+                metadata_json=metadata_json,
+                is_active=is_active,
+                priority=priority,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(item)
+            created_items.append(item)
+        except Exception as e:
+            errors.append(f"row {index}: {e}")
+
+    await session.commit()
+
+    indexed_count = 0
+    store = get_chromadb_store()
+    for item in created_items:
+        if not item.is_active:
+            continue
+        try:
+            await store.add_item_async(business_id, item)
+            item.embedding_id = item.id
+            indexed_count += 1
+        except Exception as e:
+            errors.append(f"index {item.id}: {e}")
+
+    await session.commit()
+
+    return KnowledgeUploadResponse(
+        business_id=business_id,
+        created_count=len(created_items),
+        indexed_count=indexed_count,
+        error_count=len(errors),
+        errors=errors,
+    )
+
+
+@router.post("/reindex", response_model=KnowledgeReindexResponse)
+async def reindex_knowledge_items(
+    auth_business_id: RequireBusinessAccess,
+    business_id: str = Form(...),
+    session: AsyncSession = Depends(get_session),
+) -> KnowledgeReindexResponse:
+    """Rebuild vector index for all active business knowledge items."""
+    if business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to reindex business '{business_id}'",
+        )
+
+    retriever = KnowledgeRetriever(session)
+    indexed_count = await retriever.reindex_business(business_id)
+
+    # Keep DB embedding IDs in sync with deterministic Chroma IDs (item.id).
+    stmt = select(KnowledgeItem).where(
+        KnowledgeItem.business_id == business_id,  # type: ignore[arg-type]
+        KnowledgeItem.is_active == True,  # type: ignore[arg-type]  # noqa: E712
+    )
+    result = await session.execute(stmt)
+    for item in result.scalars().all():
+        item.embedding_id = item.id
+
+    await session.commit()
+
+    return KnowledgeReindexResponse(
+        business_id=business_id,
+        indexed_count=indexed_count,
+    )
+
+
+@router.get("/stats", response_model=KnowledgeStatsResponse)
+async def get_knowledge_stats(
+    auth_business_id: RequireBusinessAccess,
+    business_id: str = Query(...),
+    session: AsyncSession = Depends(get_session),
+) -> KnowledgeStatsResponse:
+    """Return per-business knowledge and vector index stats."""
+    if business_id != auth_business_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Not authorized to view stats for business '{business_id}'",
+        )
+
+    stmt = select(KnowledgeItem).where(KnowledgeItem.business_id == business_id)  # type: ignore[arg-type]
+    result = await session.execute(stmt)
+    items = result.scalars().all()
+
+    active_items = [item for item in items if item.is_active]
+    indexed_items = [item for item in active_items if item.embedding_id]
+
+    category_counts: dict[str, int] = {cat.value: 0 for cat in KnowledgeCategory}
+    for item in items:
+        category_counts[item.category.value] += 1
+
+    chromadb_count = 0
+    with contextlib.suppress(Exception):
+        chromadb_count = int(get_chromadb_store().get_collection_stats(business_id).get("count", 0))
+
+    return KnowledgeStatsResponse(
+        business_id=business_id,
+        total_items=len(items),
+        active_items=len(active_items),
+        indexed_items=len(indexed_items),
+        chromadb_count=chromadb_count,
+        category_counts=category_counts,
+    )
 
 
 @router.get("/{item_id}", response_model=KnowledgeItemResponse)

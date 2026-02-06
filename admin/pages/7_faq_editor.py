@@ -8,14 +8,35 @@ import streamlit as st
 
 from admin.components.auth import require_auth
 from src.db.models import KnowledgeCategory, KnowledgeItem
-from src.db.repositories.businesses import KnowledgeItemRepository
+from src.db.repositories.businesses import BusinessRepository, KnowledgeItemRepository
 from src.db.session import get_sync_session
 from src.services.knowledge.chromadb_store import get_chromadb_store
 
 st.set_page_config(page_title="FAQ Editor | Vartalaap", page_icon="V", layout="wide")
 
-# Default business for MVP
+# Default business fallback when DB is empty
 BUSINESS_ID = "himalayan_kitchen"
+
+
+def _select_business_id() -> str:
+    """Render business selector and persist selected business in session state."""
+    with get_sync_session() as session:
+        business_repo = BusinessRepository(session)
+        businesses = business_repo.list_all()
+
+    business_ids = [b.id for b in businesses] or [BUSINESS_ID]
+    current = st.session_state.get("selected_business_id", business_ids[0])
+    if current not in business_ids:
+        current = business_ids[0]
+
+    selected = st.selectbox(
+        "Business",
+        business_ids,
+        index=business_ids.index(current),
+        key="faq_editor_business_selector",
+    )
+    st.session_state.selected_business_id = selected
+    return selected
 
 # Common FAQ topics
 FAQ_TOPICS = [
@@ -44,8 +65,14 @@ def main() -> None:
     st.title("FAQ Editor")
     st.caption("Manage frequently asked questions for knowledge-based retrieval")
 
+    global BUSINESS_ID
+
     # Sidebar for topics filter
     with st.sidebar:
+        BUSINESS_ID = _select_business_id()
+        st.caption(f"Editing: `{BUSINESS_ID}`")
+        st.divider()
+
         st.subheader("Topics")
         topics = ["All"] + FAQ_TOPICS
         selected_topic = st.radio("Filter by topic:", topics)

@@ -65,6 +65,7 @@ class CallSessionRegistry:
         *,
         business_id: str = "himalayan_kitchen",
         caller_id_hash: str | None = None,
+        caller_phone_encrypted: str | None = None,
         greeting_text: str | None = None,
         settings: Settings | None = None,
     ) -> tuple[CallSession, VoicePipeline]:
@@ -94,6 +95,7 @@ class CallSessionRegistry:
                 call_id=call_id,
                 business_id=business_id,
                 caller_id_hash=caller_id_hash,
+                caller_phone_encrypted=caller_phone_encrypted,
                 greeting_text=greeting_text,
             )
             pipeline = VoicePipeline(session, settings=settings)

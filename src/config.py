@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     # ==========================================================================
     # TTS Configuration
     # ==========================================================================
+    tts_provider: Literal["auto", "elevenlabs", "piper", "edge"] = Field(
+        default="auto",
+        description="Default TTS provider routing strategy",
+    )
     piper_model_path: str | None = Field(
         default=None,
         description="Path to Piper ONNX model file. Defaults to data/models/piper/{voice}.onnx",
@@ -97,6 +101,14 @@ class Settings(BaseSettings):
     edge_tts_voice: str = Field(
         default="hi-IN-SwaraNeural",
         description="Edge TTS voice name",
+    )
+    elevenlabs_voice_id: str = Field(
+        default="9BWtsMINqrJLrRacOk9x",
+        description="Default ElevenLabs voice ID",
+    )
+    elevenlabs_model_id: str = Field(
+        default="eleven_multilingual_v2",
+        description="Default ElevenLabs model ID",
     )
     tts_target_sample_rate: int = Field(
         default=8000,

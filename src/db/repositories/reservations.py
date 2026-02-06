@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import yaml
@@ -12,7 +14,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import Session
 
-from src.db.models import Reservation, ReservationStatus
+from src.db.models import Business, Reservation, ReservationStatus
 
 
 def _load_business_config(business_id: str) -> dict:
@@ -21,6 +23,82 @@ def _load_business_config(business_id: str) -> dict:
         return {}
     with path.open() as f:
         return yaml.safe_load(f) or {}
+
+
+def _parse_json_object(value: str | None) -> dict[str, Any]:
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _normalize_reservation_rules(raw: dict[str, Any]) -> dict[str, int]:
+    """Normalize legacy and canonical rule keys to one runtime schema."""
+    normalized = dict(raw)
+
+    # Legacy keys accepted for backward compatibility.
+    if "advance_days" not in normalized and "max_advance_booking_days" in normalized:
+        normalized["advance_days"] = normalized["max_advance_booking_days"]
+    if "slot_duration_minutes" not in normalized and "dining_window_mins" in normalized:
+        normalized["slot_duration_minutes"] = normalized["dining_window_mins"]
+    if (
+        "buffer_between_bookings_minutes" not in normalized
+        and "buffer_between_bookings_mins" in normalized
+    ):
+        normalized["buffer_between_bookings_minutes"] = normalized["buffer_between_bookings_mins"]
+    if (
+        "min_advance_booking_minutes" not in normalized
+        and "min_advance_booking_mins" in normalized
+    ):
+        normalized["min_advance_booking_minutes"] = normalized["min_advance_booking_mins"]
+
+    return {
+        "min_party_size": int(normalized.get("min_party_size", 1)),
+        "max_party_size": int(normalized.get("max_party_size", 10)),
+        "max_phone_party_size": int(
+            normalized.get("max_phone_party_size", normalized.get("max_party_size", 10))
+        ),
+        "total_seats": int(normalized.get("total_seats", 40)),
+        "advance_days": int(normalized.get("advance_days", 30)),
+        "slot_duration_minutes": int(normalized.get("slot_duration_minutes", 90)),
+        "buffer_between_bookings_minutes": int(
+            normalized.get("buffer_between_bookings_minutes", 15)
+        ),
+        "min_advance_booking_minutes": int(normalized.get("min_advance_booking_minutes", 30)),
+    }
+
+
+def _load_runtime_config_from_yaml(business_id: str) -> tuple[dict[str, Any], dict[str, int]]:
+    config = _load_business_config(business_id)
+    business = config.get("business", {}) if isinstance(config.get("business"), dict) else {}
+    rules = config.get("reservation_rules", {})
+    if not isinstance(rules, dict):
+        rules = {}
+    return business, _normalize_reservation_rules(rules)
+
+
+def _load_runtime_config_from_db(business: Business) -> tuple[dict[str, Any], dict[str, int]]:
+    business_config = {
+        "timezone": business.timezone or "Asia/Kolkata",
+        "operating_hours": _parse_json_object(business.operating_hours_json),
+    }
+    rules = _normalize_reservation_rules(_parse_json_object(business.reservation_rules_json))
+    return business_config, rules
+
+
+def _get_business_from_sync_db(session: Session, business_id: str) -> Business | None:
+    result = session.execute(select(Business).where(Business.id == business_id))  # type: ignore[arg-type]
+    return result.scalar_one_or_none()
+
+
+async def _get_business_from_async_db(
+    session: AsyncSession, business_id: str
+) -> Business | None:
+    result = await session.execute(select(Business).where(Business.id == business_id))  # type: ignore[arg-type]
+    return result.scalar_one_or_none()
 
 
 def _parse_time(value: str) -> time:
@@ -88,12 +166,20 @@ class ReservationRepository:
         reservation_time: str,
         party_size: int,
     ) -> AvailabilityResult:
+        business = _get_business_from_sync_db(self.session, business_id)
+        if business:
+            business_config, rules = _load_runtime_config_from_db(business)
+        else:
+            business_config, rules = _load_runtime_config_from_yaml(business_id)
+
         return _check_availability_common(
             business_id=business_id,
             reservation_date=reservation_date,
             reservation_time=reservation_time,
             party_size=party_size,
             reservations=self._load_reservations_for_date(business_id, reservation_date),
+            business_config=business_config,
+            rules=rules,
         )
 
     def _load_reservations_for_date(
@@ -147,12 +233,20 @@ class AsyncReservationRepository:
         party_size: int,
     ) -> AvailabilityResult:
         reservations = await self._load_reservations_for_date(business_id, reservation_date)
+        business = await _get_business_from_async_db(self.session, business_id)
+        if business:
+            business_config, rules = _load_runtime_config_from_db(business)
+        else:
+            business_config, rules = _load_runtime_config_from_yaml(business_id)
+
         return _check_availability_common(
             business_id=business_id,
             reservation_date=reservation_date,
             reservation_time=reservation_time,
             party_size=party_size,
             reservations=reservations,
+            business_config=business_config,
+            rules=rules,
         )
 
     async def _load_reservations_for_date(
@@ -174,25 +268,23 @@ def _check_availability_common(
     reservation_time: str,
     party_size: int,
     reservations: list[Reservation],
+    business_config: dict[str, Any],
+    rules: dict[str, int],
 ) -> AvailabilityResult:
-    config = _load_business_config(business_id)
-    business = config.get("business", {})
-    rules = config.get("reservation_rules", {})
-
     min_party = int(rules.get("min_party_size", 1))
-    max_party = int(rules.get("max_phone_party_size", 10))
+    max_party = int(rules.get("max_phone_party_size", rules.get("max_party_size", 10)))
     total_seats = int(rules.get("total_seats", 40))
-    dining_window = int(rules.get("dining_window_mins", 90))
-    buffer_mins = int(rules.get("buffer_between_bookings_mins", 15))
-    min_advance = int(rules.get("min_advance_booking_mins", 30))
-    max_advance_days = int(rules.get("max_advance_booking_days", 30))
+    dining_window = int(rules.get("slot_duration_minutes", 90))
+    buffer_mins = int(rules.get("buffer_between_bookings_minutes", 15))
+    min_advance = int(rules.get("min_advance_booking_minutes", 30))
+    max_advance_days = int(rules.get("advance_days", 30))
 
     if party_size < min_party:
         return AvailabilityResult(False, reason="party_size_too_small")
     if party_size > max_party:
         return AvailabilityResult(False, reason="party_size_too_large")
 
-    tz_name = business.get("timezone", "Asia/Kolkata")
+    tz_name = business_config.get("timezone", "Asia/Kolkata")
     try:
         tz = ZoneInfo(tz_name)
     except Exception:
@@ -207,19 +299,22 @@ def _check_availability_common(
     if requested_dt > (now + timedelta(days=max_advance_days)):
         return AvailabilityResult(False, reason="too_far")
 
-    # Operating hours check
+    # Operating-hours check (supports legacy "09:00-22:00" and structured objects).
     day_key = reservation_date.strftime("%A").lower()
-    hours = business.get("operating_hours", {}).get(day_key, "closed")
+    hours = business_config.get("operating_hours", {}).get(day_key, "closed")
     if not hours or hours == "closed":
         return AvailabilityResult(False, reason="closed")
-    try:
-        start_str, end_str = hours.split("-")
-        start_time = _parse_time(start_str)
-        end_time = _parse_time(end_str)
-    except ValueError:
-        return AvailabilityResult(False, reason="invalid_hours")
 
-    if not (start_time <= requested_time <= end_time):
+    parsed_hours = _parse_day_hours(hours)
+    if not parsed_hours:
+        return AvailabilityResult(False, reason="invalid_hours")
+    start_time, end_time, overnight = parsed_hours
+
+    if overnight:
+        in_hours = requested_time >= start_time or requested_time <= end_time
+    else:
+        in_hours = start_time <= requested_time <= end_time
+    if not in_hours:
         return AvailabilityResult(False, reason="outside_hours")
 
     # Capacity check within dining window + buffer
@@ -252,3 +347,31 @@ def _check_availability_common(
         used_seats=used_seats,
         total_seats=total_seats,
     )
+
+
+def _parse_day_hours(day_hours: Any) -> tuple[time, time, bool] | None:
+    """Parse day schedule from string or object representation."""
+    if isinstance(day_hours, str):
+        if day_hours.lower() == "closed":
+            return None
+        try:
+            start_str, end_str = day_hours.split("-", 1)
+            return _parse_time(start_str.strip()), _parse_time(end_str.strip()), False
+        except ValueError:
+            return None
+
+    if isinstance(day_hours, dict):
+        open_time_raw = day_hours.get("open")
+        close_time_raw = day_hours.get("close")
+        if not open_time_raw or not close_time_raw:
+            return None
+        try:
+            return (
+                _parse_time(str(open_time_raw)),
+                _parse_time(str(close_time_raw)),
+                bool(day_hours.get("overnight", False)),
+            )
+        except ValueError:
+            return None
+
+    return None

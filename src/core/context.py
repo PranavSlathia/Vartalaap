@@ -18,6 +18,30 @@ if TYPE_CHECKING:
     from src.db.models import Business
     from src.services.knowledge.protocol import KnowledgeResult
 
+GENERIC_FEW_SHOT_EXAMPLES = [
+    {
+        "user": "Aapki services kya hain?",
+        "assistant": (
+            "Humari main services ke baare mein bata deti hoon. "
+            "Aap kis specific service ki details chahte hain?"
+        ),
+    },
+    {
+        "user": "Kal evening mein slot mil sakta hai?",
+        "assistant": (
+            "Ji, main availability check karne mein help kar sakti hoon. "
+            "Approx kitne baje ka slot chahiye?"
+        ),
+    },
+    {
+        "user": "Mujhe ek policy samajhni hai",
+        "assistant": (
+            "Bilkul, main policy clearly explain karti hoon. "
+            "Kaunsi policy ke baare mein poochna hai?"
+        ),
+    },
+]
+
 
 @dataclass
 class ConversationManager:
@@ -57,7 +81,7 @@ class ConversationManager:
         """
         self._business_db = business
 
-    def set_retrieved_knowledge(self, knowledge: KnowledgeResult) -> None:
+    def set_retrieved_knowledge(self, knowledge: KnowledgeResult | None) -> None:
         """Set retrieved knowledge for LLM context injection."""
         self._retrieved_knowledge = knowledge
 
@@ -92,13 +116,15 @@ class ConversationManager:
         except KeyError:
             tz = ZoneInfo("Asia/Kolkata")
 
+        business_type = str(business.get("type", "restaurant"))
+
         # Load prompt template and few-shot examples
-        prompt_template = self._load_prompt_template()
-        few_shot_examples = self._get_few_shot_examples()
+        prompt_template = self._load_prompt_template(business_type=business_type)
+        few_shot_examples = self._get_few_shot_examples(business_type=business_type)
 
         return ConversationContext(
             business_name=business.get("name", "Restaurant"),
-            business_type=business.get("type", "restaurant"),
+            business_type=business_type,
             timezone=tz_name,
             current_datetime=datetime.now(tz),
             operating_hours=business.get("operating_hours", {}),
@@ -137,13 +163,15 @@ class ConversationManager:
             with contextlib.suppress(json.JSONDecodeError):
                 reservation_rules = json.loads(business.reservation_rules_json)
 
+        business_type = business.type.value
+
         # Load prompt template and few-shot examples
-        prompt_template = self._load_prompt_template()
-        few_shot_examples = self._get_few_shot_examples()
+        prompt_template = self._load_prompt_template(business_type=business_type)
+        few_shot_examples = self._get_few_shot_examples(business_type=business_type)
 
         return ConversationContext(
             business_name=business.name,
-            business_type=business.type.value,
+            business_type=business_type,
             timezone=tz_name,
             current_datetime=datetime.now(tz),
             operating_hours=operating_hours,
@@ -167,13 +195,15 @@ class ConversationManager:
                 self._business_config = {}
         return self._business_config
 
-    def _load_prompt_template(self) -> str | None:
+    def _load_prompt_template(self, business_type: str = "restaurant") -> str | None:
         """Load prompt template from config files.
 
         Tries business-specific template first, then falls back to generic.
         """
         paths = [
             Path(f"config/prompts/{self.business_id}_bot.txt"),
+            Path(f"config/prompts/{business_type}_bot.txt"),
+            Path("config/prompts/general_bot.txt"),
             Path("config/prompts/restaurant_bot.txt"),
         ]
 
@@ -183,11 +213,14 @@ class ConversationManager:
 
         return None
 
-    def _get_few_shot_examples(self) -> list[dict[str, str]]:
+    def _get_few_shot_examples(self, business_type: str = "restaurant") -> list[dict[str, str]]:
         """Get few-shot examples for the LLM.
 
-        Uses the RestaurantPromptBuilder's examples.
+        Uses restaurant examples for booking businesses and generic examples for others.
         """
+        if business_type != "restaurant":
+            return GENERIC_FEW_SHOT_EXAMPLES
+
         from src.prompts.restaurant import FEW_SHOT_EXAMPLES
 
         # Return first 6 examples to save tokens (already subset in builder)

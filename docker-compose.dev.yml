@@ -60,6 +60,30 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Frontend (React + Vite)
+  # ==========================================================================
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "5173:5173"
+    environment:
+      # Browser-facing URLs (localhost for user's browser)
+      - VITE_API_URL=http://localhost:8000
+      - VITE_KEYCLOAK_URL=http://localhost:8080
+      - VITE_KEYCLOAK_REALM=vartalaap
+      - VITE_KEYCLOAK_CLIENT_ID=vartalaap-web
+      - VITE_BUSINESS_ID=himalayan_kitchen
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules  # Persist node_modules
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ==========================================================================
   # Infrastructure
   # ==========================================================================
 
@@ -88,7 +112,9 @@ services:
       - KC_DB_PASSWORD=keycloak
       - KC_HOSTNAME_STRICT=false
       - KC_HTTP_ENABLED=true
-    command: start-dev
+    command: start-dev --import-realm
+    volumes:
+      - ./config/keycloak/vartalaap-realm.json:/opt/keycloak/data/import/vartalaap-realm.json:ro
     depends_on:
       keycloak-db:
         condition: service_healthy
@@ -112,3 +138,4 @@ services:
 volumes:
   redis_data:
   keycloak_db_data:
+  web_node_modules:

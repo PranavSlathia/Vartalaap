@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from sqlmodel import SQLModel
 
 from src.db.models import (
     Business,
@@ -17,7 +16,6 @@ from src.db.models import (
     SuggestionStatus,
     TranscriptReview,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -186,7 +184,12 @@ class TestDuplicateReviewPrevention:
     """Tests for unique constraint on call_log_id."""
 
     @pytest.mark.asyncio
-    async def test_unique_constraint_on_call_log_id(self, async_session, sample_business, sample_call_log):
+    async def test_unique_constraint_on_call_log_id(
+        self,
+        async_session,
+        sample_business,
+        sample_call_log,
+    ):
         """Verify unique constraint prevents duplicate reviews."""
         from sqlalchemy.exc import IntegrityError
 

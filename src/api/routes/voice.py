@@ -1,12 +1,14 @@
 """Voice API endpoint for browser-based voice testing."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.config import get_settings
 from src.core.session import CallSession
@@ -25,6 +27,35 @@ _sessions: dict[str, CallSession] = {}
 AUDIO_DIR = Path("data/audio_cache")
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
+NON_PRODUCTION_PARITY_NOTICE = (
+    "Browser voice test uses a non-production path and may differ from live telephony quality."
+)
+
+DEFAULT_ELEVENLABS_VOICE_ID = "9BWtsMINqrJLrRacOk9x"
+DEFAULT_ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
+DEFAULT_EDGE_VOICE = "hi-IN-SwaraNeural"
+
+
+class TTSSelection(BaseModel):
+    """Voice test TTS selection sent by the browser UI."""
+
+    provider: Literal["auto", "elevenlabs", "edge", "piper", "gtts"] = "auto"
+    voice_id: str | None = None
+    model_id: str | None = None
+    edge_voice: str | None = None
+    piper_voice: str | None = None
+
+
+class TextToSpeechRequest(BaseModel):
+    """Request body for direct browser TTS generation."""
+
+    text: str = Field(min_length=1)
+    provider: Literal["auto", "elevenlabs", "edge", "piper", "gtts"] = "auto"
+    voice_id: str | None = None
+    model_id: str | None = None
+    edge_voice: str | None = None
+    piper_voice: str | None = None
+
 
 def get_or_create_session(session_id: str) -> CallSession:
     """Get existing session or create new one."""
@@ -35,8 +66,6 @@ def get_or_create_session(session_id: str) -> CallSession:
 
 async def transcribe_webm(audio_data: bytes) -> str:
     """Transcribe webm audio using Deepgram."""
-    import asyncio
-
     from deepgram import DeepgramClient, PrerecordedOptions
 
     try:
@@ -74,14 +103,43 @@ async def transcribe_webm(audio_data: bytes) -> str:
         return ""
 
 
-def generate_tts_elevenlabs(text: str) -> str | None:
+def _save_audio_bytes(audio_bytes: bytes, suffix: str) -> str:
+    """Persist generated audio bytes and return public URL."""
+    audio_id = str(uuid.uuid4())[:8]
+    filename = f"{audio_id}.{suffix}"
+    audio_path = AUDIO_DIR / filename
+    with open(audio_path, "wb") as f:
+        f.write(audio_bytes)
+    return f"/api/voice/audio/{filename}"
+
+
+def _pcm16_to_wav_bytes(raw_pcm: bytes, sample_rate: int) -> bytes:
+    """Wrap raw mono PCM16 bytes into a WAV container."""
+    import io
+    import wave
+
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)  # int16
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(raw_pcm)
+    return wav_buffer.getvalue()
+
+
+def generate_tts_elevenlabs(
+    text: str,
+    *,
+    voice_id: str | None = None,
+    model_id: str | None = None,
+) -> str | None:
     """Generate TTS using ElevenLabs (realistic Hindi voice)."""
     try:
         settings = get_settings()
 
         if not settings.elevenlabs_api_key:
-            logger.warning("ELEVENLABS_API_KEY not set, falling back to gTTS")
-            return generate_tts_gtts(text)
+            logger.warning("ELEVENLABS_API_KEY not set")
+            return None
 
         api_key = settings.elevenlabs_api_key.get_secret_value()
 
@@ -89,30 +147,86 @@ def generate_tts_elevenlabs(text: str) -> str | None:
 
         client = ElevenLabs(api_key=api_key)
 
-        # Use multilingual v2 model with a natural voice
-        # "Aria" voice is warm and natural, good for Hindi
         audio_generator = client.text_to_speech.convert(
             text=text,
-            voice_id="9BWtsMINqrJLrRacOk9x",  # Aria - natural, warm voice
-            model_id="eleven_multilingual_v2",  # Best multilingual model
+            voice_id=voice_id or settings.elevenlabs_voice_id or DEFAULT_ELEVENLABS_VOICE_ID,
+            model_id=model_id or settings.elevenlabs_model_id or DEFAULT_ELEVENLABS_MODEL_ID,
             output_format="mp3_44100_128",
         )
 
-        # Save to file
-        audio_id = str(uuid.uuid4())[:8]
-        audio_path = AUDIO_DIR / f"{audio_id}.mp3"
+        audio_bytes = b"".join(audio_generator)
+        if not audio_bytes:
+            return None
 
-        with open(audio_path, "wb") as f:
-            for chunk in audio_generator:
-                f.write(chunk)
-
-        logger.info(f"Generated ElevenLabs TTS: {audio_path}")
-        return f"/api/voice/audio/{audio_id}.mp3"
+        audio_url = _save_audio_bytes(audio_bytes, "mp3")
+        logger.info(f"Generated ElevenLabs TTS: {audio_url}")
+        return audio_url
 
     except Exception as e:
         logger.error(f"ElevenLabs TTS error: {e}")
-        # Fallback to gTTS
-        return generate_tts_gtts(text)
+        return None
+
+
+async def generate_tts_edge(
+    text: str,
+    *,
+    voice: str | None = None,
+) -> str | None:
+    """Generate TTS using Edge neural voices (MP3 output)."""
+    try:
+        import edge_tts
+
+        selected_voice = voice or get_settings().edge_tts_voice or DEFAULT_EDGE_VOICE
+        audio_id = str(uuid.uuid4())[:8]
+        filename = f"{audio_id}.mp3"
+        audio_path = AUDIO_DIR / filename
+
+        communicate = edge_tts.Communicate(text=text, voice=selected_voice)
+        await communicate.save(str(audio_path))
+
+        logger.info(f"Generated Edge TTS: {audio_path}")
+        return f"/api/voice/audio/{filename}"
+    except Exception as e:
+        logger.error(f"Edge TTS error: {e}")
+        return None
+
+
+async def generate_tts_piper(
+    text: str,
+    *,
+    voice_name: str | None = None,
+) -> str | None:
+    """Generate TTS using local Piper model (WAV output)."""
+    try:
+        from src.services.tts.piper import PiperTTSService
+
+        settings = get_settings()
+        target_rate = 16000
+        service = PiperTTSService(
+            settings=settings,
+            voice_name=voice_name or settings.piper_voice,
+        )
+        try:
+            raw_pcm, _metadata = await service.synthesize(
+                text,
+                target_sample_rate=target_rate,
+            )
+        finally:
+            await service.close()
+
+        if not raw_pcm:
+            return None
+
+        wav_bytes = _pcm16_to_wav_bytes(
+            raw_pcm,
+            sample_rate=target_rate,
+        )
+        audio_url = _save_audio_bytes(wav_bytes, "wav")
+        logger.info(f"Generated Piper TTS: {audio_url}")
+        return audio_url
+    except Exception as e:
+        logger.error(f"Piper TTS error: {e}")
+        return None
 
 
 def generate_tts_gtts(text: str) -> str | None:
@@ -123,27 +237,70 @@ def generate_tts_gtts(text: str) -> str | None:
         tts = gTTS(text=text, lang="hi", slow=False)
 
         audio_id = str(uuid.uuid4())[:8]
-        audio_path = AUDIO_DIR / f"{audio_id}.mp3"
+        filename = f"{audio_id}.mp3"
+        audio_path = AUDIO_DIR / filename
         tts.save(str(audio_path))
 
         logger.info(f"Generated gTTS: {audio_path}")
-        return f"/api/voice/audio/{audio_id}.mp3"
+        return f"/api/voice/audio/{filename}"
 
     except Exception as e:
         logger.error(f"gTTS error: {e}")
         return None
 
 
-def generate_tts(text: str) -> str | None:
-    """Generate TTS audio - tries ElevenLabs first, falls back to gTTS."""
-    # Try ElevenLabs first for better quality
-    return generate_tts_elevenlabs(text)
+async def generate_tts(text: str, selection: TTSSelection) -> tuple[str | None, str]:
+    """Generate TTS audio using selected provider with fallback chain."""
+    provider = selection.provider
+    chain: list[str]
+
+    if provider == "elevenlabs":
+        chain = ["elevenlabs", "edge", "piper", "gtts"]
+    elif provider == "edge":
+        chain = ["edge", "elevenlabs", "piper", "gtts"]
+    elif provider == "piper":
+        chain = ["piper", "elevenlabs", "edge", "gtts"]
+    elif provider == "gtts":
+        chain = ["gtts"]
+    else:
+        chain = ["elevenlabs", "edge", "piper", "gtts"]
+
+    for candidate in chain:
+        audio_url: str | None = None
+        if candidate == "elevenlabs":
+            audio_url = generate_tts_elevenlabs(
+                text,
+                voice_id=selection.voice_id,
+                model_id=selection.model_id,
+            )
+        elif candidate == "edge":
+            audio_url = await generate_tts_edge(
+                text,
+                voice=selection.edge_voice,
+            )
+        elif candidate == "piper":
+            audio_url = await generate_tts_piper(
+                text,
+                voice_name=selection.piper_voice,
+            )
+        elif candidate == "gtts":
+            audio_url = generate_tts_gtts(text)
+
+        if audio_url:
+            return audio_url, candidate
+
+    return None, "none"
 
 
 @router.post("/voice/process")
 async def process_voice(
     audio: UploadFile = File(...),
     session_id: str = Form(...),
+    tts_provider: Literal["auto", "elevenlabs", "edge", "piper", "gtts"] = Form("auto"),
+    tts_voice_id: str | None = Form(default=None),
+    tts_model_id: str | None = Form(default=None),
+    tts_edge_voice: str | None = Form(default=None),
+    tts_piper_voice: str | None = Form(default=None),
 ):
     """Process voice input and return response with audio."""
     try:
@@ -165,13 +322,24 @@ async def process_voice(
         response, metadata = await session.process_user_input(transcript)
 
         # Generate TTS
-        audio_url = generate_tts(response)
+        selection = TTSSelection(
+            provider=tts_provider,
+            voice_id=tts_voice_id,
+            model_id=tts_model_id,
+            edge_voice=tts_edge_voice,
+            piper_voice=tts_piper_voice,
+        )
+        audio_url, provider_used = await generate_tts(response, selection)
 
         return JSONResponse({
             "transcript": transcript,
             "response": response,
             "audio_url": audio_url,
+            "tts_provider_requested": selection.provider,
+            "tts_provider_used": provider_used,
             "latency_ms": metadata.first_token_ms,
+            "production_parity": False,
+            "notice": NON_PRODUCTION_PARITY_NOTICE,
         })
 
     except Exception as e:
@@ -190,22 +358,39 @@ async def get_audio(filename: str):
     if not audio_path.exists():
         return JSONResponse({"error": "Audio not found"}, status_code=404)
 
+    suffix = audio_path.suffix.lower()
+    if suffix == ".wav":
+        media_type = "audio/wav"
+    elif suffix == ".mp3":
+        media_type = "audio/mpeg"
+    else:
+        media_type = "application/octet-stream"
+
     return FileResponse(
         audio_path,
-        media_type="audio/mpeg",
+        media_type=media_type,
         filename=filename,
     )
 
 
 @router.post("/voice/tts")
-async def text_to_speech(request: dict):
+async def text_to_speech(request: TextToSpeechRequest):
     """Generate TTS audio from text."""
-    text = request.get("text", "")
-    if not text:
-        return JSONResponse({"error": "No text provided"}, status_code=400)
-
-    audio_url = generate_tts(text)
-    return JSONResponse({"audio_url": audio_url})
+    selection = TTSSelection(
+        provider=request.provider,
+        voice_id=request.voice_id,
+        model_id=request.model_id,
+        edge_voice=request.edge_voice,
+        piper_voice=request.piper_voice,
+    )
+    audio_url, provider_used = await generate_tts(request.text, selection)
+    return JSONResponse({
+        "audio_url": audio_url,
+        "tts_provider_requested": selection.provider,
+        "tts_provider_used": provider_used,
+        "production_parity": False,
+        "notice": NON_PRODUCTION_PARITY_NOTICE,
+    })
 
 
 class EndSessionRequest(BaseModel):
@@ -289,11 +474,13 @@ async def end_session(request: EndSessionRequest):
                 from arq import create_pool
 
                 pool = await create_pool(settings.redis_settings)
-                await pool.enqueue_job("generate_call_summary", session.call_id)
-                await pool.enqueue_job("analyze_transcript_quality", session.call_id)
-                await pool.close()
-                analysis_queued = True
-                logger.info(f"Queued analysis for voice test: {session.call_id}")
+                try:
+                    await pool.enqueue_job("generate_call_summary", session.call_id)
+                    await pool.enqueue_job("analyze_transcript_quality", session.call_id)
+                    analysis_queued = True
+                    logger.info(f"Queued analysis for voice test: {session.call_id}")
+                finally:
+                    await pool.close()
             except Exception as e:
                 logger.warning(f"Failed to queue analysis job: {e}")
 

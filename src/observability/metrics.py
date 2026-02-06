@@ -36,6 +36,12 @@ RAG_HIT_RATE = Counter(
     ["score_bucket", "business_id"],
 )
 
+FOLLOWUP_MISSING_PHONE = Counter(
+    "vartalaap_followup_missing_phone_total",
+    "Operator followup requests skipped due to missing encrypted phone",
+    ["business_id"],
+)
+
 # =============================================================================
 # Gauges
 # =============================================================================
@@ -157,6 +163,11 @@ def record_rag_metrics(
         RAG_HIT_RATE.labels(score_bucket=bucket, business_id=business_id).inc()
     else:
         RAG_HIT_RATE.labels(score_bucket="miss", business_id=business_id).inc()
+
+
+def record_followup_missing_phone(business_id: str) -> None:
+    """Record a followup creation miss due to missing encrypted caller phone."""
+    FOLLOWUP_MISSING_PHONE.labels(business_id=business_id).inc()
 
 
 def get_metrics() -> bytes:

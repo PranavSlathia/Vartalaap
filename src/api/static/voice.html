@@ -38,6 +38,46 @@
             overflow-y: auto;
             margin-bottom: 20px;
         }
+        .tts-controls {
+            background: #1e1e30;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+            border: 1px solid #2f2f49;
+        }
+        .tts-controls h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .tts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .tts-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .tts-field label {
+            font-size: 11px;
+            color: #8d8daa;
+        }
+        .tts-field select,
+        .tts-field input {
+            height: 34px;
+            border-radius: 8px;
+            border: 1px solid #3a3a59;
+            background: #262640;
+            color: #f4f4ff;
+            padding: 0 10px;
+            font-size: 13px;
+        }
+        .tts-note {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #9a9aba;
+        }
         .message {
             margin-bottom: 16px;
             display: flex;
@@ -189,6 +229,12 @@
         }
         .btn-secondary:hover { background: #4b5563; }
 
+        @media (max-width: 640px) {
+            .tts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         /* Hidden audio player */
         #audioPlayer { display: none; }
     </style>
@@ -199,6 +245,61 @@
             <h1>🍽️ Himalayan Kitchen</h1>
             <p>Voice Assistant - Hands-free conversation</p>
         </header>
+
+        <div class="tts-controls">
+            <h3>Voice Model Toggle (Test Mode)</h3>
+            <div class="tts-grid">
+                <div class="tts-field">
+                    <label for="presetSelect">Preset</label>
+                    <select id="presetSelect">
+                        <option value="auto_quality">Auto Quality</option>
+                        <option value="elevenlabs_multilingual">ElevenLabs Multilingual</option>
+                        <option value="edge_hindi">Edge Hindi Neural</option>
+                        <option value="piper_local">Piper Local</option>
+                        <option value="gtts_fallback">gTTS Fallback</option>
+                        <option value="manual">Manual</option>
+                    </select>
+                </div>
+                <div class="tts-field">
+                    <label for="providerSelect">Provider</label>
+                    <select id="providerSelect">
+                        <option value="auto">auto</option>
+                        <option value="elevenlabs">elevenlabs</option>
+                        <option value="edge">edge</option>
+                        <option value="piper">piper</option>
+                        <option value="gtts">gtts</option>
+                    </select>
+                </div>
+                <div class="tts-field">
+                    <label for="modelSelect">ElevenLabs Model</label>
+                    <select id="modelSelect">
+                        <option value="">default</option>
+                        <option value="eleven_multilingual_v2">eleven_multilingual_v2</option>
+                        <option value="eleven_flash_v2_5">eleven_flash_v2_5</option>
+                        <option value="eleven_turbo_v2_5">eleven_turbo_v2_5</option>
+                    </select>
+                </div>
+                <div class="tts-field">
+                    <label for="voiceIdInput">ElevenLabs Voice ID</label>
+                    <input id="voiceIdInput" value="9BWtsMINqrJLrRacOk9x" />
+                </div>
+                <div class="tts-field">
+                    <label for="edgeVoiceSelect">Edge Voice</label>
+                    <select id="edgeVoiceSelect">
+                        <option value="">default</option>
+                        <option value="hi-IN-SwaraNeural">hi-IN-SwaraNeural</option>
+                        <option value="hi-IN-MadhurNeural">hi-IN-MadhurNeural</option>
+                        <option value="en-IN-NeerjaNeural">en-IN-NeerjaNeural</option>
+                        <option value="en-IN-PrabhatNeural">en-IN-PrabhatNeural</option>
+                    </select>
+                </div>
+                <div class="tts-field">
+                    <label for="piperVoiceInput">Piper Voice</label>
+                    <input id="piperVoiceInput" value="hi_IN-priyamvada-medium" />
+                </div>
+            </div>
+            <p class="tts-note">Changes apply immediately to greetings and every next response.</p>
+        </div>
 
         <div class="chat-container" id="chat"></div>
 
@@ -243,11 +344,50 @@
         let mediaStream;
         let silenceTimer;
         let hasSpoken = false;
+        let lastTtsProviderUsed = 'auto';
 
         // Settings
         const SILENCE_THRESHOLD = 0.015;
         const SILENCE_DURATION = 1200;  // 1.2 seconds
         const MIN_SPEECH_TIME = 300;
+        const VOICE_PRESETS = {
+            auto_quality: {
+                provider: 'auto',
+                model_id: 'eleven_multilingual_v2',
+                voice_id: '9BWtsMINqrJLrRacOk9x',
+                edge_voice: 'hi-IN-SwaraNeural',
+                piper_voice: 'hi_IN-priyamvada-medium',
+            },
+            elevenlabs_multilingual: {
+                provider: 'elevenlabs',
+                model_id: 'eleven_multilingual_v2',
+                voice_id: '9BWtsMINqrJLrRacOk9x',
+                edge_voice: '',
+                piper_voice: '',
+            },
+            edge_hindi: {
+                provider: 'edge',
+                model_id: '',
+                voice_id: '',
+                edge_voice: 'hi-IN-SwaraNeural',
+                piper_voice: '',
+            },
+            piper_local: {
+                provider: 'piper',
+                model_id: '',
+                voice_id: '',
+                edge_voice: '',
+                piper_voice: 'hi_IN-priyamvada-medium',
+            },
+            gtts_fallback: {
+                provider: 'gtts',
+                model_id: '',
+                voice_id: '',
+                edge_voice: '',
+                piper_voice: '',
+            },
+            manual: null,
+        };
 
         // Elements
         const orb = document.getElementById('orb');
@@ -258,6 +398,38 @@
         const toggleBtn = document.getElementById('toggleBtn');
         const audioPlayer = document.getElementById('audioPlayer');
         const bars = volumeBars.querySelectorAll('.volume-bar');
+        const presetSelect = document.getElementById('presetSelect');
+        const providerSelect = document.getElementById('providerSelect');
+        const modelSelect = document.getElementById('modelSelect');
+        const voiceIdInput = document.getElementById('voiceIdInput');
+        const edgeVoiceSelect = document.getElementById('edgeVoiceSelect');
+        const piperVoiceInput = document.getElementById('piperVoiceInput');
+
+        function applyPreset(presetKey) {
+            const preset = VOICE_PRESETS[presetKey];
+            if (!preset) return;
+            providerSelect.value = preset.provider;
+            modelSelect.value = preset.model_id;
+            voiceIdInput.value = preset.voice_id;
+            edgeVoiceSelect.value = preset.edge_voice;
+            piperVoiceInput.value = preset.piper_voice;
+        }
+
+        presetSelect.addEventListener('change', () => {
+            applyPreset(presetSelect.value);
+        });
+
+        function getTtsSelection() {
+            return {
+                provider: providerSelect.value || 'auto',
+                model_id: modelSelect.value || null,
+                voice_id: voiceIdInput.value.trim() || null,
+                edge_voice: edgeVoiceSelect.value || null,
+                piper_voice: piperVoiceInput.value.trim() || null,
+            };
+        }
+
+        applyPreset('auto_quality');
 
         // Audio player events
         audioPlayer.onended = () => {
@@ -353,8 +525,8 @@
             }
         }
 
-        function resetConversation() {
-            stopConversation();
+        async function resetConversation() {
+            await stopConversation();
             sessionId = Date.now().toString();
             chat.innerHTML = '';
             status.textContent = 'Click to start conversation';
@@ -387,7 +559,7 @@
             orb.className = 'orb speaking';
             orbText.innerHTML = 'Speaking...';
             volumeBars.style.display = 'none';
-            status.textContent = 'Bot is speaking...';
+            status.textContent = `Bot is speaking (${lastTtsProviderUsed})...`;
             status.className = 'status-text';
         }
 
@@ -522,6 +694,12 @@
                 const formData = new FormData();
                 formData.append('audio', blob, 'recording.webm');
                 formData.append('session_id', sessionId);
+                const selection = getTtsSelection();
+                formData.append('tts_provider', selection.provider);
+                if (selection.voice_id) formData.append('tts_voice_id', selection.voice_id);
+                if (selection.model_id) formData.append('tts_model_id', selection.model_id);
+                if (selection.edge_voice) formData.append('tts_edge_voice', selection.edge_voice);
+                if (selection.piper_voice) formData.append('tts_piper_voice', selection.piper_voice);
 
                 const response = await fetch('/api/voice/process', {
                     method: 'POST',
@@ -538,6 +716,9 @@
                     addMessage('bot', data.response);
 
                     if (data.audio_url) {
+                        if (data.tts_provider_used && data.tts_provider_used !== 'none') {
+                            lastTtsProviderUsed = data.tts_provider_used;
+                        }
                         playSpeech(data.audio_url);
                     } else {
                         // No audio, start listening again
@@ -564,12 +745,23 @@
         // TTS
         async function generateTTS(text) {
             try {
+                const selection = getTtsSelection();
                 const response = await fetch('/api/voice/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text })
+                    body: JSON.stringify({
+                        text,
+                        provider: selection.provider,
+                        voice_id: selection.voice_id,
+                        model_id: selection.model_id,
+                        edge_voice: selection.edge_voice,
+                        piper_voice: selection.piper_voice,
+                    })
                 });
                 const data = await response.json();
+                if (data.tts_provider_used && data.tts_provider_used !== 'none') {
+                    lastTtsProviderUsed = data.tts_provider_used;
+                }
                 return data.audio_url;
             } catch (err) {
                 console.error('TTS error:', err);

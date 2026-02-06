@@ -224,6 +224,62 @@ class TestVoicePipeline:
         assert "total_turns" in metrics_dict
         assert "barge_in_count" in metrics_dict
 
+    def test_resolve_tts_provider_order_auto_with_edge(
+        self,
+        session: CallSession,
+        settings_factory,
+    ) -> None:
+        """Auto mode should include managed and local fallbacks when enabled."""
+        settings = settings_factory(
+            elevenlabs_api_key="test-eleven-key",
+            edge_tts_enabled=True,
+            tts_provider="auto",
+        )
+        pipeline = VoicePipeline(session, settings=settings)
+
+        assert pipeline._resolve_tts_provider_order() == ["elevenlabs", "piper", "edge"]
+
+    def test_resolve_tts_provider_order_prefers_edge(
+        self,
+        session: CallSession,
+        settings_factory,
+    ) -> None:
+        """Edge preference should still keep safe fallback ordering."""
+        settings = settings_factory(
+            elevenlabs_api_key="test-eleven-key",
+            edge_tts_enabled=True,
+            tts_provider="auto",
+        )
+        session._voice_profile = {"provider": "edge"}  # noqa: SLF001
+        pipeline = VoicePipeline(session, settings=settings)
+
+        assert pipeline._resolve_tts_provider_order() == ["edge", "elevenlabs", "piper"]
+
+    def test_tts_service_cache_key_changes_with_profile(
+        self,
+        session: CallSession,
+        settings_factory,
+    ) -> None:
+        """Cache key should vary when voice/model settings change."""
+        settings = settings_factory()
+        pipeline = VoicePipeline(session, settings=settings)
+
+        session._voice_profile = {  # noqa: SLF001
+            "provider": "elevenlabs",
+            "voice_id": "voice-a",
+            "model_id": "model-a",
+        }
+        key_a = pipeline._tts_service_cache_key("elevenlabs")
+
+        session._voice_profile = {  # noqa: SLF001
+            "provider": "elevenlabs",
+            "voice_id": "voice-b",
+            "model_id": "model-a",
+        }
+        key_b = pipeline._tts_service_cache_key("elevenlabs")
+
+        assert key_a != key_b
+
     @pytest.mark.asyncio
     async def test_finalize(self, pipeline: VoicePipeline) -> None:
         """Test pipeline finalization."""

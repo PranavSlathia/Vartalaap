@@ -30,6 +30,7 @@ export function VoiceTest() {
           </ul>
           <strong className="block mt-3">How to use:</strong>
           <ol className="list-decimal list-inside mt-1 space-y-1">
+            <li>Choose a voice preset/provider from the toggle panel</li>
             <li>Click the <strong>"Hold to Speak"</strong> button</li>
             <li>Speak in <strong>Hindi or English</strong></li>
             <li>Click again to stop recording</li>

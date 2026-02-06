@@ -103,7 +103,7 @@ class ExtractedReservation:
 
 
 # Extraction system prompt
-EXTRACTION_SYSTEM_PROMPT = """You are analyzing a restaurant voice conversation to extract reservation details.
+EXTRACTION_SYSTEM_PROMPT = """You are analyzing a business voice conversation to extract booking details.
 
 Output ONLY valid JSON with these fields (use null for unknown/not mentioned):
 {
@@ -171,7 +171,7 @@ class ReservationExtractor:
         # Build extraction prompt
         history_summary = self._summarize_history(conversation_history) if conversation_history else ""
 
-        extraction_prompt = f"""Analyze this restaurant voice conversation turn:
+        extraction_prompt = f"""Analyze this business voice conversation turn:
 
 {f"Previous context: {history_summary}" if history_summary else ""}
 

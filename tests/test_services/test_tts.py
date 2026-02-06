@@ -313,7 +313,6 @@ class TestPiperTTSServiceUnit:
         """Test service initializes with default Hindi voice."""
         service = PiperTTSService(settings=base_settings)
         assert service._voice_name == DEFAULT_PIPER_MODEL
-        assert service._voice_name == "hi_IN-female-medium"
 
     def test_init_custom_model_path(self, base_settings) -> None:
         """Test service with custom model path."""
@@ -334,19 +333,22 @@ class TestPiperTTSServiceUnit:
     def test_init_default_model_path(self, base_settings) -> None:
         """Test default model path construction."""
         service = PiperTTSService(settings=base_settings)
-        expected = Path("data/models/piper/hi_IN-female-medium.onnx")
+        expected = Path(f"data/models/piper/{DEFAULT_PIPER_MODEL}.onnx")
         assert service._model_path == expected
 
     def test_voice_lazy_init(self, base_settings) -> None:
         """Test voice is None until accessed."""
         service = PiperTTSService(settings=base_settings)
-        assert service._voice is None
+        assert service._tts is None
 
     def test_voice_model_not_found(self, base_settings) -> None:
         """Test error when model file missing."""
-        service = PiperTTSService(settings=base_settings)
+        service = PiperTTSService(
+            settings=base_settings,
+            model_path=Path("/tmp/missing-piper-model.onnx"),
+        )
         with pytest.raises(TTSModelNotFoundError) as exc_info:
-            _ = service.voice
+            _ = service.tts
         assert "TTS model not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
@@ -355,7 +357,7 @@ class TestPiperTTSServiceUnit:
         service = PiperTTSService(settings=base_settings)
         service._resampler = AudioResampler(22050, 8000)
         await service.close()
-        assert service._voice is None
+        assert service._tts is None
         assert service._resampler is None
 
     @pytest.mark.asyncio
@@ -400,7 +402,10 @@ class TestPiperTTSServiceUnit:
 
     def test_validate_model_path_missing(self, base_settings) -> None:
         """Test validate_model_path raises for missing model."""
-        service = PiperTTSService(settings=base_settings)
+        service = PiperTTSService(
+            settings=base_settings,
+            model_path=Path("/tmp/missing-piper-model.onnx"),
+        )
         with pytest.raises(TTSModelNotFoundError):
             service.validate_model_path()
 
@@ -498,6 +503,7 @@ def _piper_model_ready() -> bool:
     not _piper_model_ready(),
     reason="PIPER_MODEL_PATH missing or file not found - skipping Piper integration tests",
 )
+@pytest.mark.external
 class TestPiperTTSIntegration:
     """Integration tests for Piper TTS (requires PIPER_MODEL_PATH env var)."""
 
@@ -547,6 +553,7 @@ class TestPiperTTSIntegration:
     os.environ.get("EDGE_TTS_ENABLED", "").lower() != "true",
     reason="EDGE_TTS_ENABLED not true - skipping Edge TTS integration tests",
 )
+@pytest.mark.external
 class TestEdgeTTSIntegration:
     """Integration tests for Edge TTS (requires EDGE_TTS_ENABLED env var)."""
 

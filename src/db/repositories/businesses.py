@@ -192,6 +192,16 @@ def _business_to_config_dict(business: Business) -> dict:
         with contextlib.suppress(json.JSONDecodeError):
             reservation_rules = json.loads(business.reservation_rules_json)
 
+    voice_profile = {}
+    if business.voice_profile_json:
+        with contextlib.suppress(json.JSONDecodeError):
+            voice_profile = json.loads(business.voice_profile_json)
+
+    rag_profile = {}
+    if business.rag_profile_json:
+        with contextlib.suppress(json.JSONDecodeError):
+            rag_profile = json.loads(business.rag_profile_json)
+
     return {
         "business": {
             "name": business.name,
@@ -202,6 +212,8 @@ def _business_to_config_dict(business: Business) -> dict:
         "reservation_rules": reservation_rules,
         "greeting_text": business.greeting_text,
         "menu_summary": business.menu_summary,
+        "voice_profile": voice_profile,
+        "rag_profile": rag_profile,
     }
 
 

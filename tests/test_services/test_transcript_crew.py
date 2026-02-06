@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -15,7 +15,6 @@ from src.services.analysis.transcript_crew import (
     TranscriptAnalysisCrew,
     TranscriptReviewResult,
 )
-
 
 # =============================================================================
 # TranscriptReviewResult Tests
@@ -328,13 +327,15 @@ class TestCrewAnalysisMocked:
     @pytest.mark.asyncio
     async def test_analyze_transcript_returns_result_on_llm_failure(self):
         """Analysis returns default result when LLM fails."""
-        with patch("crewai.Crew.kickoff", side_effect=Exception("LLM Error")):
-            with patch("src.services.analysis.transcript_crew.LLM"):
-                crew = TranscriptAnalysisCrew()
-                result = await crew.analyze_transcript(
-                    transcript="Bot: Hello\nCaller: Hi",
-                    business_context="Test business",
-                )
+        with (
+            patch("crewai.Crew.kickoff", side_effect=Exception("LLM Error")),
+            patch("src.services.analysis.transcript_crew.LLM"),
+        ):
+            crew = TranscriptAnalysisCrew()
+            result = await crew.analyze_transcript(
+                transcript="Bot: Hello\nCaller: Hi",
+                business_context="Test business",
+            )
 
         # Should return default result, not raise
         assert result.quality_score == 3
@@ -358,9 +359,11 @@ class TestCrewAnalysisMocked:
             captured_transcript = transcript
             return original_create(transcript, context)
 
-        with patch.object(crew, "_create_review_task", side_effect=mock_create):
-            with patch("crewai.Crew.kickoff", side_effect=Exception("Skip")):
-                await crew.analyze_transcript(long_transcript, "Test")
+        with (
+            patch.object(crew, "_create_review_task", side_effect=mock_create),
+            patch("crewai.Crew.kickoff", side_effect=Exception("Skip")),
+        ):
+            await crew.analyze_transcript(long_transcript, "Test")
 
         # Verify truncation was applied
         if captured_transcript:

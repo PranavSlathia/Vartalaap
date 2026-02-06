@@ -122,7 +122,14 @@ def create_app() -> FastAPI:
     async def voice_ui():
         """Serve the voice testing UI."""
         static_path = Path(__file__).parent / "api" / "static" / "voice.html"
-        return FileResponse(static_path, media_type="text/html")
+        return FileResponse(
+            static_path,
+            media_type="text/html",
+            headers={
+                # Allow microphone access when embedded in iframe
+                "Permissions-Policy": "microphone=*",
+            },
+        )
 
     return app
 

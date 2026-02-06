@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
@@ -20,7 +20,6 @@ from src.services.analysis.transcript_crew import (
     ReviewedIssue,
     TranscriptReviewResult,
 )
-
 
 # =============================================================================
 # Fixtures
