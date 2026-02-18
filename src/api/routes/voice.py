@@ -117,7 +117,7 @@ async def transcribe_webm(audio_data: bytes) -> _TranscriptionResult:
 
     options = PrerecordedOptions(
         model="nova-2",
-        detect_language=True,
+        language="hi-Latn",  # Hinglish: Hindi words in Latin/Roman script
         smart_format=True,
         punctuate=True,
     )
@@ -202,13 +202,15 @@ async def generate_tts_cartesia(
         pcm_chunks: list[bytes] = []
         first_chunk_ms: float | None = None
         t0 = time.perf_counter()
-        async for chunk in service.synthesize_stream(
+        generator, _ = await service.synthesize_stream(
             text,
             target_sample_rate=_BROWSER_SAMPLE_RATE,
-        ):
-            if first_chunk_ms is None:
-                first_chunk_ms = round((time.perf_counter() - t0) * 1000, 1)
-            pcm_chunks.append(chunk)
+        )
+        async for chunk in generator:
+            if chunk.audio_bytes:
+                if first_chunk_ms is None:
+                    first_chunk_ms = round((time.perf_counter() - t0) * 1000, 1)
+                pcm_chunks.append(chunk.audio_bytes)
 
         if not pcm_chunks:
             return None, None
@@ -230,15 +232,18 @@ async def generate_tts_cartesia(
 
 
 def _build_voice_compare_response(transcript: str) -> str:
-    """Fast, deterministic response for voice comparison mode."""
+    """Fast, deterministic response for voice comparison mode.
+
+    Always replies in Hinglish so Arushi (Hinglish voice) sounds natural.
+    """
     cleaned = transcript.strip()
     if not cleaned:
-        return "I could not catch that. Please try once more."
+        return "Sorry, mujhe samajh nahi aaya. Please ek baar aur boliye."
 
     has_devanagari = any("\u0900" <= ch <= "\u097F" for ch in cleaned)
     if has_devanagari:
-        return f"ठीक है, मैंने सुना: {cleaned}"
-    return f"Got it. I heard: {cleaned}"
+        return f"Theek hai, maine suna: {cleaned}"
+    return f"Haan, maine suna: {cleaned}"
 
 
 @router.post("/voice/process")

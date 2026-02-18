@@ -16,7 +16,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /bin/uv
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies (--frozen ensures uv.lock is used exactly)
-RUN uv sync --frozen --no-dev
+# UV_HTTP_TIMEOUT increased for large packages (torch, etc.)
+RUN UV_HTTP_TIMEOUT=300 uv sync --frozen --no-dev
 
 # Copy source
 COPY src/ ./src/

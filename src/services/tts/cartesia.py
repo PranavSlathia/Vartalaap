@@ -1,20 +1,24 @@
 """Cartesia Sonic TTS service — primary TTS for Vartalaap.
 
-Uses Cartesia's sonic-multilingual model via WebSocket streaming.
-WebSocket connection is kept open per call for lowest latency on subsequent turns.
+Uses Cartesia's sonic-3 model via raw WebSocket streaming.
+Connects directly to wss://api.cartesia.ai/tts/websocket — does NOT use the
+AsyncCartesia SDK client for the streaming path (matches Pipecat's approach).
 
 Why Cartesia:
-- sonic-multilingual supports Hindi natively
-- ~90ms time-to-first-chunk (vs ~200ms for Piper which synthesizes all-at-once)
+- sonic-3 supports Hindi natively
+- ~90ms time-to-first-chunk via persistent WebSocket
 - True streaming: audio bytes arrive while model is still generating
-- Far more natural voice than Piper for both Hindi and English
+- Far more natural voice than alternatives for Hindi and Hinglish
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
+import json
 import time
+import uuid
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
@@ -28,9 +32,11 @@ if TYPE_CHECKING:
 
 logger: Any = get_logger(__name__)
 
-# Cartesia sonic-multilingual outputs 22050Hz PCM by default
+# Cartesia sonic-3 outputs 22050Hz PCM by default
 CARTESIA_SOURCE_RATE = 22050
-CARTESIA_MODEL = "sonic-multilingual"
+CARTESIA_MODEL = "sonic-3"
+CARTESIA_VERSION = "2025-04-16"
+CARTESIA_WS_URL = "wss://api.cartesia.ai/tts/websocket"
 
 
 def _detect_language(text: str) -> str:
@@ -75,20 +81,7 @@ class CartesiaTTSService:
         self._api_key = api_key
         self._voice_id = voice_id
         self._model_id = model_id
-        self._client: Any | None = None
         self._cancel_event: asyncio.Event | None = None
-
-    async def _ensure_client(self) -> Any:
-        """Lazy-initialize Cartesia async client."""
-        if self._client is None:
-            try:
-                from cartesia import AsyncCartesia
-            except ImportError as e:
-                raise TTSSynthesisError(
-                    "cartesia package not installed. Run: uv add cartesia"
-                ) from e
-            self._client = AsyncCartesia(api_key=self._api_key)
-        return self._client
 
     def cancel(self) -> None:
         """Cancel ongoing synthesis (called on barge-in)."""
@@ -107,7 +100,6 @@ class CartesiaTTSService:
         Returns immediately — audio arrives via the generator as Cartesia
         streams it back. First audio bytes typically arrive in ~90ms.
         """
-        await self._ensure_client()
         self._cancel_event = asyncio.Event()
         language = _detect_language(text)
 
@@ -137,44 +129,66 @@ class CartesiaTTSService:
         chunk_size_ms: int,
         metadata: SynthesisMetadata,
     ) -> AsyncGenerator[AudioChunk, None]:
-        """Internal streaming generator. Uses Cartesia WebSocket for lowest latency."""
+        """Stream audio via raw WebSocket — same approach as Pipecat's CartesiaTTSService.
+
+        Bypasses the AsyncCartesia SDK client entirely for the streaming path.
+        Connects directly to the Cartesia WebSocket API with JSON messages.
+        """
+        from websockets.asyncio.client import connect as ws_connect
+
         start_time = time.perf_counter()
         first_chunk_yielded = False
         total_samples = 0
         resampler = AudioResampler(CARTESIA_SOURCE_RATE, target_sample_rate)
 
-        # Bytes per chunk at target rate (16-bit PCM = 2 bytes/sample)
         bytes_per_ms = (target_sample_rate * 2) / 1000
         target_chunk_bytes = int(chunk_size_ms * bytes_per_ms)
+        context_id = str(uuid.uuid4())
+
+        url = f"{CARTESIA_WS_URL}?api_key={self._api_key}&cartesia_version={CARTESIA_VERSION}"
 
         try:
-            client = await self._ensure_client()
-
-            # WebSocket streaming: persistent connection, lowest per-turn latency
-            async with client.tts.websocket() as ws:
-                async for chunk in ws.send(
-                    model_id=self._model_id,
-                    transcript=text,
-                    voice={"id": self._voice_id},
-                    language=language,
-                    output_format={
+            async with ws_connect(url) as ws:
+                # Send TTS request as JSON (Pipecat-compatible message format)
+                msg = json.dumps({
+                    "transcript": text,
+                    "model_id": self._model_id,
+                    "voice": {"mode": "id", "id": self._voice_id},
+                    "output_format": {
                         "container": "raw",
                         "encoding": "pcm_s16le",
                         "sample_rate": CARTESIA_SOURCE_RATE,
                     },
-                    stream=True,
-                ):
-                    # Barge-in: stop immediately
+                    "language": language,
+                    "context_id": context_id,
+                    "continue": False,
+                    "add_timestamps": False,
+                })
+                await ws.send(msg)
+
+                async for raw_msg in ws:
+                    # Barge-in: cancel and stop
                     if self._cancel_event and self._cancel_event.is_set():
                         logger.debug("Cartesia TTS cancelled (barge-in)")
+                        with contextlib.suppress(Exception):
+                            await ws.send(json.dumps({"context_id": context_id, "cancel": True}))
                         return
 
-                    # Extract audio bytes from chunk
-                    audio: bytes | None = getattr(chunk, "audio", None)
-                    if not audio:
+                    data = json.loads(raw_msg)
+                    msg_type = data.get("type")
+
+                    if msg_type == "done":
+                        break
+
+                    if msg_type == "error":
+                        raise TTSSynthesisError(f"Cartesia error: {data.get('error', data)}")
+
+                    if msg_type != "chunk":
                         continue
 
-                    # Resample to telephony rate (22050 → 8000Hz for Plivo)
+                    # data["data"] is base64-encoded raw PCM
+                    audio: bytes = base64.b64decode(data["data"])
+
                     if resampler.needs_resampling:
                         audio = await resampler.resample(audio)
 
@@ -182,26 +196,21 @@ class CartesiaTTSService:
                         continue
 
                     if not first_chunk_yielded:
-                        metadata.first_chunk_ms = (
-                            time.perf_counter() - start_time
-                        ) * 1000
+                        metadata.first_chunk_ms = (time.perf_counter() - start_time) * 1000
                         first_chunk_yielded = True
                         logger.debug(
                             f"Cartesia first chunk: {metadata.first_chunk_ms:.0f}ms "
                             f"(lang={language})"
                         )
 
-                    # Yield in fixed-size chunks for smooth streaming
                     offset = 0
                     while offset < len(audio):
                         if self._cancel_event and self._cancel_event.is_set():
                             return
-
                         piece = audio[offset : offset + target_chunk_bytes]
                         offset += target_chunk_bytes
                         chunk_samples = len(piece) // 2
                         total_samples += chunk_samples
-
                         yield AudioChunk(
                             audio_bytes=piece,
                             sample_rate=target_sample_rate,
@@ -209,11 +218,9 @@ class CartesiaTTSService:
                             is_final=False,
                         )
 
-            # Final chunk signal
             metadata.output_samples = total_samples
             metadata.output_duration_ms = (total_samples / target_sample_rate) * 1000
             metadata.total_synthesis_ms = (time.perf_counter() - start_time) * 1000
-
             logger.debug(
                 f"Cartesia synthesis done: {metadata.input_chars} chars → "
                 f"{metadata.output_duration_ms:.0f}ms audio "
@@ -252,18 +259,9 @@ class CartesiaTTSService:
         return b"".join(chunks), metadata
 
     async def close(self) -> None:
-        """Close Cartesia client and WebSocket connections."""
-        if self._client is not None:
-            with contextlib.suppress(Exception):
-                await self._client.close()
-            self._client = None
+        """No persistent client to close — each synthesis opens/closes its own WebSocket."""
         self._cancel_event = None
 
     async def health_check(self) -> bool:
-        """Verify Cartesia API key is valid by initializing the client."""
-        try:
-            await self._ensure_client()
-            return self._client is not None
-        except Exception as e:
-            logger.warning(f"Cartesia health check failed: {e}")
-            return False
+        """Verify Cartesia API key is set."""
+        return bool(self._api_key)
