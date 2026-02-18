@@ -7,11 +7,9 @@ Admins can list/create businesses, while tenant-scoped routes remain isolated.
 import json
 import re
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,22 +32,6 @@ LEGACY_RULE_KEYS = {
     "buffer_between_bookings_mins": "buffer_between_bookings_minutes",
 }
 
-EDGE_VOICE_OPTIONS = [
-    {"id": "hi-IN-SwaraNeural", "name": "Swara (Hindi, Female)", "language": "hi-IN"},
-    {"id": "hi-IN-MadhurNeural", "name": "Madhur (Hindi, Male)", "language": "hi-IN"},
-    {"id": "en-IN-NeerjaNeural", "name": "Neerja (English India, Female)", "language": "en-IN"},
-    {"id": "en-IN-PrabhatNeural", "name": "Prabhat (English India, Male)", "language": "en-IN"},
-]
-
-ELEVENLABS_MODEL_FALLBACKS = [
-    {"id": "eleven_multilingual_v2", "name": "Multilingual v2", "language": "multilingual"},
-    {"id": "eleven_flash_v2_5", "name": "Flash v2.5", "language": "multilingual"},
-    {"id": "eleven_turbo_v2_5", "name": "Turbo v2.5", "language": "multilingual"},
-]
-
-ELEVENLABS_VOICE_FALLBACKS = [
-    {"id": "9BWtsMINqrJLrRacOk9x", "name": "Aria", "language": "multilingual"},
-]
 
 
 def default_reservation_rules() -> "ReservationRules":
@@ -179,53 +161,23 @@ class ReservationRules(BaseModel):
 
 
 class VoiceProfile(BaseModel):
-    """Voice provider/runtime settings for a business."""
+    """Cartesia TTS runtime settings for a business.
 
-    provider: Literal["auto", "elevenlabs", "piper", "edge"] = Field(
-        default="auto",
-        description="Preferred provider: auto, elevenlabs, piper, or edge",
-    )
+    voice_id: Cartesia voice UUID — overrides CARTESIA_VOICE_ID env var.
+    Find voices at https://play.cartesia.ai/voices
+    """
+
     voice_id: str | None = None
-    model_id: str | None = None
-    piper_voice: str | None = None
-    edge_voice: str | None = None
-    speaking_style: str | None = None
-    stability: float | None = Field(default=None, ge=0.0, le=1.0)
-    similarity_boost: float | None = Field(default=None, ge=0.0, le=1.0)
-
-
-class VoiceCatalogItem(BaseModel):
-    """Voice/model option for frontend selection."""
-
-    id: str
-    name: str
-    language: str | None = None
-    hindi_recommended: bool = False
-
-
-class VoicePreset(BaseModel):
-    """Ready-to-test preset for comparing TTS quality."""
-
-    id: str
-    name: str
-    description: str
-    provider: Literal["auto", "elevenlabs", "piper", "edge"]
-    voice_id: str | None = None
-    model_id: str | None = None
-    piper_voice: str | None = None
-    edge_voice: str | None = None
+    speed: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
 class VoiceOptionsResponse(BaseModel):
-    """Catalog of available voice providers, models, and recommended presets."""
+    """Voice configuration info for the settings UI."""
 
-    providers: list[Literal["auto", "elevenlabs", "piper", "edge"]]
-    provider_status: dict[str, bool]
-    elevenlabs_models: list[VoiceCatalogItem]
-    elevenlabs_voices: list[VoiceCatalogItem]
-    piper_voices: list[VoiceCatalogItem]
-    edge_voices: list[VoiceCatalogItem]
-    recommended_presets: list[VoicePreset]
+    provider: str = "cartesia"
+    voice_id: str | None = None      # Current voice_id from DB or env fallback
+    model: str = "sonic-multilingual"
+    voice_catalog_url: str = "https://play.cartesia.ai/voices"
 
 
 class RagProfile(BaseModel):
@@ -444,285 +396,6 @@ async def sync_phone_numbers(
         session.add(phone_record)
 
 
-def _is_hindi_like(*values: str | None) -> bool:
-    combined = " ".join(v.lower() for v in values if v)
-    return "hindi" in combined or "hi-" in combined or " hi" in combined
-
-
-def _voice_item(
-    item_id: str,
-    name: str,
-    language: str | None = None,
-    *,
-    hindi_recommended: bool = False,
-) -> VoiceCatalogItem:
-    return VoiceCatalogItem(
-        id=item_id,
-        name=name,
-        language=language,
-        hindi_recommended=hindi_recommended,
-    )
-
-
-async def _fetch_elevenlabs_models() -> list[VoiceCatalogItem]:
-    settings = get_settings()
-    if not settings.elevenlabs_api_key:
-        return [
-            _voice_item(
-                item["id"],
-                item["name"],
-                item["language"],
-                hindi_recommended="multilingual" in (item["language"] or ""),
-            )
-            for item in ELEVENLABS_MODEL_FALLBACKS
-        ]
-
-    url = "https://api.elevenlabs.io/v1/models"
-    headers = {"xi-api-key": settings.elevenlabs_api_key.get_secret_value()}
-
-    models: list[VoiceCatalogItem] = []
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            payload = response.json()
-    except Exception:
-        payload = []
-
-    if isinstance(payload, list):
-        for raw in payload:
-            if not isinstance(raw, dict):
-                continue
-            model_id = raw.get("model_id") or raw.get("id")
-            if not model_id:
-                continue
-
-            # If the API exposes capability flags, keep only TTS-capable models.
-            can_tts = raw.get("can_do_text_to_speech")
-            if can_tts is False:
-                continue
-
-            name = str(raw.get("name") or model_id)
-            language = "multilingual" if "multilingual" in name.lower() else None
-            if language is None:
-                langs = raw.get("languages") or raw.get("supported_languages")
-                if isinstance(langs, list):
-                    collected: list[str] = []
-                    for lang_item in langs:
-                        if isinstance(lang_item, dict):
-                            code = lang_item.get("language_id") or lang_item.get("language")
-                            if isinstance(code, str):
-                                collected.append(code)
-                        elif isinstance(lang_item, str):
-                            collected.append(lang_item)
-                    if collected:
-                        language = ", ".join(collected[:3])
-
-            models.append(
-                _voice_item(
-                    str(model_id),
-                    name,
-                    language,
-                    hindi_recommended=_is_hindi_like(language, name)
-                    or "multilingual" in name.lower(),
-                )
-            )
-
-    if not models:
-        models = [
-            _voice_item(
-                item["id"],
-                item["name"],
-                item["language"],
-                hindi_recommended="multilingual" in (item["language"] or ""),
-            )
-            for item in ELEVENLABS_MODEL_FALLBACKS
-        ]
-
-    models.sort(key=lambda item: (not item.hindi_recommended, item.name.lower()))
-    return models
-
-
-async def _fetch_elevenlabs_voices() -> list[VoiceCatalogItem]:
-    settings = get_settings()
-    if not settings.elevenlabs_api_key:
-        return [
-            _voice_item(
-                item["id"],
-                item["name"],
-                item["language"],
-                hindi_recommended="multilingual" in (item["language"] or ""),
-            )
-            for item in ELEVENLABS_VOICE_FALLBACKS
-        ]
-
-    url = "https://api.elevenlabs.io/v1/voices"
-    headers = {"xi-api-key": settings.elevenlabs_api_key.get_secret_value()}
-
-    voices: list[VoiceCatalogItem] = []
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            payload = response.json()
-    except Exception:
-        payload = {}
-
-    raw_voices = payload.get("voices") if isinstance(payload, dict) else None
-    if isinstance(raw_voices, list):
-        for raw in raw_voices:
-            if not isinstance(raw, dict):
-                continue
-            voice_id = raw.get("voice_id") or raw.get("id")
-            if not voice_id:
-                continue
-            name = str(raw.get("name") or voice_id)
-            labels = raw.get("labels")
-
-            language = None
-            accent = None
-            if isinstance(labels, dict):
-                raw_language = labels.get("language")
-                raw_accent = labels.get("accent")
-                language = raw_language if isinstance(raw_language, str) else None
-                accent = raw_accent if isinstance(raw_accent, str) else None
-
-            combined_language = language
-            if accent and language:
-                combined_language = f"{language} ({accent})"
-
-            voices.append(
-                _voice_item(
-                    str(voice_id),
-                    name,
-                    combined_language,
-                    hindi_recommended=_is_hindi_like(language, accent, name)
-                    or "multilingual" in str(raw.get("category", "")).lower(),
-                )
-            )
-
-    if not voices:
-        voices = [
-            _voice_item(
-                item["id"],
-                item["name"],
-                item["language"],
-                hindi_recommended="multilingual" in (item["language"] or ""),
-            )
-            for item in ELEVENLABS_VOICE_FALLBACKS
-        ]
-
-    voices.sort(key=lambda item: (not item.hindi_recommended, item.name.lower()))
-    return voices
-
-
-def _discover_piper_voices() -> list[VoiceCatalogItem]:
-    settings = get_settings()
-    voices: list[VoiceCatalogItem] = []
-
-    model_root = Path("data/models/piper")
-    if model_root.exists():
-        for model_file in sorted(model_root.glob("*.onnx")):
-            voice_id = model_file.stem
-            voices.append(
-                _voice_item(
-                    voice_id,
-                    voice_id,
-                    "local",
-                    hindi_recommended=_is_hindi_like(voice_id),
-                )
-            )
-
-    configured = settings.piper_voice
-    if configured and configured not in {v.id for v in voices}:
-        voices.insert(
-            0,
-            _voice_item(
-                configured,
-                configured,
-                "configured",
-                hindi_recommended=_is_hindi_like(configured),
-            ),
-        )
-
-    if not voices:
-        voices.append(_voice_item(configured, configured, "configured", hindi_recommended=True))
-
-    voices.sort(key=lambda item: (not item.hindi_recommended, item.name.lower()))
-    return voices
-
-
-def _edge_voice_items() -> list[VoiceCatalogItem]:
-    return [
-        _voice_item(
-            item["id"],
-            item["name"],
-            item["language"],
-            hindi_recommended=_is_hindi_like(item["language"], item["name"]),
-        )
-        for item in EDGE_VOICE_OPTIONS
-    ]
-
-
-def _recommended_presets(
-    elevenlabs_models: list[VoiceCatalogItem],
-    elevenlabs_voices: list[VoiceCatalogItem],
-    piper_voices: list[VoiceCatalogItem],
-    edge_voices: list[VoiceCatalogItem],
-    provider_status: dict[str, bool],
-) -> list[VoicePreset]:
-    presets: list[VoicePreset] = [
-        VoicePreset(
-            id="auto_quality",
-            name="Auto Quality",
-            description="Production default. Tries managed quality first, then local fallback.",
-            provider="auto",
-        )
-    ]
-
-    if provider_status.get("elevenlabs"):
-        preferred_model = next(
-            (m.id for m in elevenlabs_models if m.hindi_recommended),
-            elevenlabs_models[0].id if elevenlabs_models else None,
-        )
-        preferred_voice = next(
-            (v.id for v in elevenlabs_voices if v.hindi_recommended),
-            elevenlabs_voices[0].id if elevenlabs_voices else None,
-        )
-        presets.append(
-            VoicePreset(
-                id="elevenlabs_hindi",
-                name="ElevenLabs Hindi/Multilingual",
-                description="Managed voice tuned for natural Hindi/Hinglish output.",
-                provider="elevenlabs",
-                model_id=preferred_model,
-                voice_id=preferred_voice,
-            )
-        )
-
-    if provider_status.get("piper") and piper_voices:
-        presets.append(
-            VoicePreset(
-                id="piper_local_hindi",
-                name="Piper Local Hindi",
-                description="CPU-first local Hindi voice for resilient fallback testing.",
-                provider="piper",
-                piper_voice=piper_voices[0].id,
-            )
-        )
-
-    if provider_status.get("edge") and edge_voices:
-        presets.append(
-            VoicePreset(
-                id="edge_hindi",
-                name="Edge Hindi Neural",
-                description="Edge neural Hindi voice path for comparison.",
-                provider="edge",
-                edge_voice=edge_voices[0].id,
-            )
-        )
-
-    return presets
 
 
 # =============================================================================
@@ -802,8 +475,9 @@ async def create_business(
 async def get_voice_options(
     business_id: str,
     auth_business_id: RequireBusinessAccess,
+    db: AsyncSession = Depends(get_session),
 ) -> VoiceOptionsResponse:
-    """Return available provider/model/voice options for frontend voice toggles."""
+    """Return current Cartesia voice configuration for this business."""
     if business_id != auth_business_id:
         raise HTTPException(
             status_code=403,
@@ -811,40 +485,27 @@ async def get_voice_options(
         )
 
     settings = get_settings()
-    elevenlabs_models = await _fetch_elevenlabs_models()
-    elevenlabs_voices = await _fetch_elevenlabs_voices()
-    piper_voices = _discover_piper_voices()
-    edge_voices = _edge_voice_items()
 
-    provider_status = {
-        "auto": True,
-        "elevenlabs": bool(settings.elevenlabs_api_key),
-        "piper": bool(piper_voices),
-        "edge": bool(settings.edge_tts_enabled),
-    }
+    # Get business to find per-business voice_id override
+    result = await db.execute(
+        select(Business).where(Business.id == business_id)
+    )
+    business = result.scalar_one_or_none()
 
-    providers: list[Literal["auto", "elevenlabs", "piper", "edge"]] = [
-        "auto",
-        "elevenlabs",
-        "piper",
-    ]
-    if provider_status["edge"]:
-        providers.append("edge")
+    # Resolve voice_id: DB override > env default
+    voice_id: str | None = None
+    if business and business.voice_profile_json:
+        try:
+            profile = json.loads(business.voice_profile_json)
+            voice_id = profile.get("voice_id")
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    if not voice_id:
+        voice_id = settings.cartesia_voice_id
 
     return VoiceOptionsResponse(
-        providers=providers,
-        provider_status=provider_status,
-        elevenlabs_models=elevenlabs_models,
-        elevenlabs_voices=elevenlabs_voices,
-        piper_voices=piper_voices,
-        edge_voices=edge_voices,
-        recommended_presets=_recommended_presets(
-            elevenlabs_models=elevenlabs_models,
-            elevenlabs_voices=elevenlabs_voices,
-            piper_voices=piper_voices,
-            edge_voices=edge_voices,
-            provider_status=provider_status,
-        ),
+        voice_id=voice_id,
+        model=settings.cartesia_model_id,
     )
 
 

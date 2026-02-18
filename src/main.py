@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from src.api.routes import (
     business,
@@ -130,6 +130,11 @@ def create_app() -> FastAPI:
                 "Permissions-Policy": "microphone=*",
             },
         )
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        """Suppress browser favicon 404 noise in logs."""
+        return Response(status_code=204)
 
     return app
 

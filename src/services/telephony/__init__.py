@@ -13,8 +13,6 @@ from src.services.telephony.plivo import (
     PlivoCallInfo,
     PlivoService,
     alaw_to_pcm16,
-    compute_audio_energy,
-    is_speech,
     mulaw_to_pcm16,
     pcm16_to_alaw,
     pcm16_to_mulaw,
@@ -33,9 +31,6 @@ __all__ = [
     "alaw_to_pcm16",
     "pcm16_to_alaw",
     "resample_audio",
-    # VAD utilities
-    "compute_audio_energy",
-    "is_speech",
     # Constants
     "PCM16_SAMPLE_WIDTH",
     "TELEPHONY_SAMPLE_RATE",

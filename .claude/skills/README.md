@@ -2,104 +2,158 @@
 
 Context-rich skills for developing the Vartalaap voice bot platform.
 
+**Before using any skill:** Read `.claude/soul.md` (what this is) and `.claude/roadmap.md` (where it's going).
+
+---
+
 ## Available Skills
 
 | Skill | Command | Use When |
 |-------|---------|----------|
-| **Backend** | `/backend` | Creating FastAPI routes, services, middleware |
-| **Model** | `/model` | Database models, JSON Schema, migrations |
-| **Admin** | `/admin` | Streamlit admin pages, UI components |
-| **Voice** | `/voice` | Voice pipeline (STT, LLM, TTS, telephony) |
-| **API** | `/api` | CRUD endpoints, OpenAPI generation |
-| **Frontend** | `/frontend` | React, TypeScript, Orval codegen, OIDC auth |
+| **Pipeline** | `/pipeline` | Frame-based pipeline, Silero VAD, streaming LLM→TTS, state machine, interruption handling |
+| **Squads** | `/squads` | Agent-as-config, function calling, filler phrases, multi-agent handoffs |
+| **Voice** | `/voice` | STT/LLM/TTS services, audio formats, resampling, latency |
+| **Backend** | `/backend` | FastAPI routes, dependency injection, middleware, arq tasks |
+| **Model** | `/model` | DB models, JSON Schema, Alembic migrations, repositories |
+| **Admin** | `/admin` | Streamlit pages, authentication, PII masking, config editor |
+| **API** | `/api` | CRUD endpoints, OpenAPI, webhooks, WebSocket |
+| **Frontend** | `/frontend` | React 19, TypeScript, Orval codegen, OIDC auth |
 
-## Skill Summaries
+---
 
-### /backend
-- FastAPI route patterns
-- Dependency injection
-- Background task enqueueing (arq)
-- Error handling with HTTP status codes
-- Logging (no PII)
-- Testing with httpx
+## Which Skill for Which Work
 
-### /model
-- Schema-first workflow (JSON Schema → Pydantic → SQLModel)
-- `datamodel-code-generator` usage
-- Alembic migrations
-- Repository pattern
-- Phone number handling (HMAC hash + AES encryption)
+### Working on the real-time audio path?
+→ `/pipeline` (frames, VAD, streaming, state machine)
 
-### /admin
-- Streamlit page structure
-- Authentication with bcrypt
-- PII masking (`98XXXX1234` format)
-- Metric cards with streamlit-extras
-- Config editor with YAML
-- Audit logging
+### Adding a new business or voice bot config?
+→ `/squads` (AssistantConfig, provider abstraction)
+
+### Adding a new capability the bot can DO (book, search, etc.)?
+→ `/squads` (tool registry, filler phrases, function calling)
+
+### Working on STT/LLM/TTS service internals?
+→ `/voice` (Deepgram, Groq, Piper, ElevenLabs, audio formats)
+
+### Building FastAPI routes, background tasks, middleware?
+→ `/backend`
+
+### Schema changes, DB models, migrations?
+→ `/model`
+
+### Streamlit admin pages?
+→ `/admin`
+
+### React/TypeScript frontend?
+→ `/frontend`
+
+---
+
+## Skill Detail Summaries
+
+### /pipeline
+- Frame-based pipeline architecture (Pipecat-inspired typed frames)
+- Silero VAD for interruption detection (replacing energy threshold)
+- Streaming LLM-to-TTS: sentence-boundary chunking for 40-60% latency reduction
+- State machine: IDLE → LISTENING → THINKING → SPEAKING → INTERRUPTED → FUNCTION_CALLING → TRANSFERRING
+- InterruptionFrame propagation pattern
+- Connection pooling and per-call setup
+
+### /squads
+- AssistantConfig Pydantic model: system_prompt + STT/LLM/TTS configs + tools
+- Three-layer provider abstraction (STTConfig, LLMConfig, TTSConfig)
+- Tool registry with decorator pattern and filler phrases
+- Multi-agent squad definition and context-preserving handoffs
+- Language detection for Hindi/English/Hinglish filler selection
+- Per-agent endpointing configuration
 
 ### /voice
-- Voice pipeline architecture
-- Deepgram STT (streaming, Hindi support)
-- Groq LLM (streaming, llama-3.1-70b)
-- Piper TTS (primary, self-hosted)
-- Edge TTS (fallback, feature-flagged)
-- Audio resampling (8kHz ↔ 16kHz ↔ 22050Hz)
-- Barge-in handling (300ms threshold)
-- Language detection
+- Deepgram STT: nova-2, language=hi, streaming, utterance_end_ms
+- Groq LLM: llama-3.3-70b-versatile, streaming, rate limiter
+- Piper TTS: self-hosted, hi_IN-priyamvada-medium, warmup pattern
+- ElevenLabs TTS: API-based, higher quality, higher cost
+- Edge TTS: feature-flagged fallback
+- Audio: 8kHz μ-law ↔ 16kHz PCM ↔ 22.05kHz (Piper output)
+
+### /backend
+- FastAPI route patterns and dependency injection
+- Background task enqueueing (arq + Redis)
+- Error handling with appropriate HTTP status codes
+- Loguru structured logging (no PII ever)
+- Testing with httpx AsyncClient
+
+### /model
+- Schema-first workflow: JSON Schema → Pydantic → SQLModel → Alembic
+- `src/schemas/*.py` are generated — NEVER edit, re-run `./scripts/generate.sh`
+- Repository pattern in `src/db/repositories/`
+- Phone security: HMAC-SHA256 hash + AES-256-GCM encryption
+- 90-day auto-purge configured in worker.py
+
+### /admin
+- Streamlit page structure and navigation
+- bcrypt authentication (single admin user MVP)
+- PII masking: `98XXXX1234` format everywhere
+- YAML config editor for business settings
+- Audit logging for admin actions
 
 ### /api
-- fastapi-crudrouter setup
-- Auto-generated CRUD endpoints
-- Custom business logic endpoints
-- Plivo webhooks
-- WebSocket audio streaming
-- Health checks
-- OpenAPI documentation
+- fastapi-crudrouter auto-generated endpoints
+- Plivo webhooks: `/plivo/answer` (returns XML), `/plivo/hangup`
+- WebSocket: `/ws/plivo/{call_uuid}` for audio streaming
+- OpenAPI export: `python scripts/export_openapi.py`
 
 ### /frontend
 - React 19 + TypeScript + Vite 7
-- Orval code generation (OpenAPI → React Query)
-- react-oidc-context for Keycloak auth
+- Orval codegen from OpenAPI (do not edit `web/src/api/`)
+- TanStack Query for server state
 - shadcn/ui + Tailwind v4
 - react-router v7 (NOT react-router-dom)
 
-## Code Generation
+---
 
-All skills reference the code generation workflow:
+## Code Generation Workflow
 
 ```
-schemas/*.json              # 1. JSON Schema (source of truth)
-    ↓ datamodel-codegen
-src/schemas/*.py            # 2. Generated Pydantic (DO NOT EDIT)
-    ↓ extend
-src/db/models.py            # 3. SQLModel tables
-    ↓ alembic --autogenerate
-migrations/versions/*.py    # 4. Database migrations
-    ↓ include in app
-src/api/routes/crud.py      # 5. CRUD endpoints (fastapi-crudrouter)
+schemas/*.json              # Source of truth
+    ↓ ./scripts/generate.sh
+src/schemas/*.py            # Generated Pydantic (DO NOT EDIT)
+    ↓ extend manually
+src/db/models.py            # SQLModel tables
+    ↓ make migration msg="..."
+migrations/versions/*.py    # Alembic migrations
+    ↓ python scripts/export_openapi.py
+openapi.json                # OpenAPI spec
+    ↓ cd web && npm run generate:api
+web/src/api/                # Generated TypeScript (DO NOT EDIT)
 ```
 
-## Reference Documents
-
-- **Tech Stack:** `docs/TECH_STACK.md` (v1.2)
-- **PRD:** `docs/PRD.md` (v1.2)
+---
 
 ## Quick Commands
 
 ```bash
-# Generate Pydantic from JSON Schema
-./scripts/generate.sh
+# Development
+uv run uvicorn src.main:app --reload          # API server
+uv run streamlit run admin/app.py             # Admin UI
+uv run arq src.worker.WorkerSettings          # Background worker
+cd web && npm run dev                         # React frontend
 
-# Create Alembic migration
-uv run alembic revision --autogenerate -m "description"
+# Voice pipeline testing
+uv run python scripts/voice_test.py          # Full pipeline smoke test
 
-# Apply migrations
-uv run alembic upgrade head
+# Code generation
+./scripts/generate.sh                         # Regenerate Pydantic schemas
+python scripts/export_openapi.py             # Re-export OpenAPI spec
+cd web && npm run generate:api               # Regenerate TypeScript client
 
-# Run API server (dev)
-uv run uvicorn src.main:app --reload
+# Database
+make migration msg="description"             # Create migration
+uv run alembic upgrade head                  # Apply migrations
+uv run alembic current                       # Check migration status
 
-# Run Streamlit admin (dev)
-uv run streamlit run admin/app.py
+# Quality
+uv run ruff check .                          # Lint Python
+uv run mypy src/                             # Type check Python
+cd web && npm run typecheck                  # Type check TypeScript
+uv run ward                                  # Run tests
 ```

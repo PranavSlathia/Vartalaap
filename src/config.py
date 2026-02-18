@@ -28,9 +28,7 @@ class Settings(BaseSettings):
     deepgram_api_key: SecretStr = Field(description="Deepgram API key for STT")
     plivo_auth_id: str = Field(description="Plivo Auth ID")
     plivo_auth_token: SecretStr = Field(description="Plivo Auth Token")
-    elevenlabs_api_key: SecretStr | None = Field(
-        default=None, description="ElevenLabs API key for realistic TTS"
-    )
+    cartesia_api_key: SecretStr = Field(description="Cartesia API key for TTS (sonic-multilingual)")
 
     # ==========================================================================
     # Security Keys
@@ -84,31 +82,16 @@ class Settings(BaseSettings):
     )
 
     # ==========================================================================
-    # TTS Configuration
+    # TTS Configuration (Cartesia Sonic)
     # ==========================================================================
-    tts_provider: Literal["auto", "elevenlabs", "piper", "edge"] = Field(
-        default="auto",
-        description="Default TTS provider routing strategy",
+    cartesia_voice_id: str = Field(
+        # Default: "Barbershop Man" — override with a Hindi voice from play.cartesia.ai/voices
+        default="a0e99841-438c-4a64-b679-ae501e7d6091",
+        description="Cartesia voice ID. Find voices at: https://play.cartesia.ai/voices",
     )
-    piper_model_path: str | None = Field(
-        default=None,
-        description="Path to Piper ONNX model file. Defaults to data/models/piper/{voice}.onnx",
-    )
-    piper_voice: str = Field(
-        default="hi_IN-priyamvada-medium",
-        description="Piper voice name (used for default model path)",
-    )
-    edge_tts_voice: str = Field(
-        default="hi-IN-SwaraNeural",
-        description="Edge TTS voice name",
-    )
-    elevenlabs_voice_id: str = Field(
-        default="9BWtsMINqrJLrRacOk9x",
-        description="Default ElevenLabs voice ID",
-    )
-    elevenlabs_model_id: str = Field(
-        default="eleven_multilingual_v2",
-        description="Default ElevenLabs model ID",
+    cartesia_model_id: str = Field(
+        default="sonic-multilingual",
+        description="Cartesia model ID. sonic-multilingual supports Hindi.",
     )
     tts_target_sample_rate: int = Field(
         default=8000,
@@ -134,17 +117,15 @@ class Settings(BaseSettings):
         default=500.0,
         description="Audio energy threshold for barge-in detection",
     )
+    deepgram_utterance_end_ms: int = Field(
+        default=400,
+        description="Silence duration (ms) before Deepgram declares utterance complete. "
+        "Lower = faster response; higher = fewer false utterance splits. "
+        "Per-business override via AssistantConfig.stt.endpointing_ms.",
+    )
     greeting_text: str = Field(
         default="Namaste! Himalayan Kitchen mein aapka swagat hai.",
         description="Initial greeting when call connects",
-    )
-
-    # ==========================================================================
-    # Feature Flags
-    # ==========================================================================
-    edge_tts_enabled: bool = Field(
-        default=False,
-        description="Enable Edge TTS as fallback (unofficial API, may be unreliable)",
     )
 
     # ==========================================================================

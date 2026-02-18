@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
+const proxyTarget =
+  process.env.VITE_API_PROXY_URL ||
+  process.env.VITE_API_URL ||
+  'http://localhost:8000';
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -26,8 +31,12 @@ export default defineConfig({
       usePolling: true, // Required for Docker volume mounts
     },
     proxy: {
+      '^/voice$': {
+        target: proxyTarget,
+        changeOrigin: true,
+      },
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
+        target: proxyTarget,
         changeOrigin: true,
       },
     },

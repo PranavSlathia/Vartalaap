@@ -4,6 +4,18 @@ import { Info, Mic } from 'lucide-react';
 
 export function VoiceTest() {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const normalizedApiUrl = apiUrl.replace(/\/$/, '');
+
+  // TODO: read from business context when multi-tenant
+  const businessId = 'himalayan_kitchen';
+
+  const directVoiceUrl = `${normalizedApiUrl}/voice?business_id=${businessId}`;
+  // In dev, load voice UI through Vite proxy so mic permission stays same-origin.
+  // The iframe shares the FastAPI origin, which lets the browser grant mic access
+  // to voice.html without requiring the user to re-allow in a cross-origin iframe.
+  const embeddedVoiceUrl = import.meta.env.DEV
+    ? `/voice?business_id=${businessId}`
+    : directVoiceUrl;
 
   return (
     <div className="space-y-6">
@@ -22,6 +34,17 @@ export function VoiceTest() {
             <li>Backend API running at <code className="text-xs bg-muted px-1 rounded">{apiUrl}</code></li>
             <li>Allow microphone access when prompted</li>
             <li>
+              If mic is blocked in embedded mode, open the standalone tester:{' '}
+              <a
+                href={directVoiceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                {directVoiceUrl}
+              </a>
+            </li>
+            <li>
               <strong>localhost:</strong> Mic works on insecure origin
             </li>
             <li>
@@ -30,7 +53,7 @@ export function VoiceTest() {
           </ul>
           <strong className="block mt-3">How to use:</strong>
           <ol className="list-decimal list-inside mt-1 space-y-1">
-            <li>Choose a voice preset/provider from the toggle panel</li>
+            <li>Choose a voice from the Voice Compare dropdown</li>
             <li>Click the <strong>"Hold to Speak"</strong> button</li>
             <li>Speak in <strong>Hindi or English</strong></li>
             <li>Click again to stop recording</li>
@@ -51,10 +74,10 @@ export function VoiceTest() {
         </CardHeader>
         <CardContent>
           <iframe
-            src={`${apiUrl}/voice`}
+            src={embeddedVoiceUrl}
             className="w-full h-[600px] border-0 rounded-lg"
             title="Voice Bot Interface"
-            allow="microphone"
+            allow="microphone; autoplay"
           />
         </CardContent>
       </Card>
@@ -74,7 +97,7 @@ export function VoiceTest() {
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium">TTS Engine</p>
-            <p className="text-sm text-muted-foreground">Piper / ElevenLabs</p>
+            <p className="text-sm text-muted-foreground">Cartesia Sonic</p>
           </div>
         </CardContent>
       </Card>

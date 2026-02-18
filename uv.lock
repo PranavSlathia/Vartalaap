@@ -337,6 +337,23 @@ wheels = [
 ]
 
 [[package]]
+name = "cartesia"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "httpx" },
+    { name = "iterators" },
+    { name = "pydub" },
+    { name = "requests" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/73/8c/042835d911210f6af0b18a1323b2839424006dbc4eafad08f0ef75edf52a/cartesia-1.4.0.tar.gz", hash = "sha256:ea64e8641e468fc324e317932308f2c6539b61c729c6320f99a86a84bf6f95a8", size = 390866, upload-time = "2025-02-11T20:38:19.592Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/bc/432fecc330bcdfad7c3e433d14d9056aa680311c8ba70548ce3b7dfc727d/cartesia-1.4.0-py3-none-any.whl", hash = "sha256:ee3d944f24790fb0b2450eb5693273a612190ed5a125b4fc2972aefe8585e227", size = 31810, upload-time = "2025-02-11T20:38:17.732Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -836,36 +853,6 @@ wheels = [
 ]
 
 [[package]]
-name = "edge-tts"
-version = "6.1.19"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "certifi" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/2b/81/58663476b9afe5ae7f28767d6cadffbf30ed99063a219e213edacecb841b/edge_tts-6.1.19.tar.gz", hash = "sha256:52fdfbaef2b3afee98bbba5e5c6365b5a6156fe78fe4e81e55749f7a563add38", size = 20131, upload-time = "2024-11-22T01:18:03.991Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/8d/6b91e2efa7e6f2438888142a66ff053e2bc301b8eddd3cb0fd2452644890/edge_tts-6.1.19-py3-none-any.whl", hash = "sha256:af49ea0539f54b0d76a73bc76cefd9deb2010a11c5ee2a189967e15830a6ba37", size = 22125, upload-time = "2024-11-22T01:18:01.14Z" },
-]
-
-[[package]]
-name = "elevenlabs"
-version = "2.33.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "pydantic-core" },
-    { name = "requests" },
-    { name = "typing-extensions" },
-    { name = "websockets" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8b/5c/0b56111f0bec07eee683da1723729779fad007048709cb9a0969f2f868d4/elevenlabs-2.33.1.tar.gz", hash = "sha256:3778195673560c709e5fb2ceca40ddae553646d65bc8e38ad1b577ab3b91de40", size = 456281, upload-time = "2026-01-30T13:56:53.716Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/73/12/fa45e98f6b672cc16275a1b1bec4e22f5b2193873b475d793a6def111700/elevenlabs-2.33.1-py3-none-any.whl", hash = "sha256:eda5a391eed2e3a67a915ad88d319fbf0d5c7978db5ba2ac79abe3c5fe7243bc", size = 1214712, upload-time = "2026-01-30T13:56:52.151Z" },
-]
-
-[[package]]
 name = "email-validator"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1137,19 +1124,6 @@ wheels = [
 ]
 
 [[package]]
-name = "gtts"
-version = "2.5.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "click" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/57/79/5ddb1dfcd663581d0d3fca34ccb1d8d841b47c22a24dc8dce416e3d87dfa/gtts-2.5.4.tar.gz", hash = "sha256:f5737b585f6442f677dbe8773424fd50697c75bdf3e36443585e30a8d48c1884", size = 24018, upload-time = "2024-11-10T21:58:00.358Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e3/6c/8b8b1fdcaee7e268536f1bb00183a5894627726b54a9ddc6fc9909888447/gTTS-2.5.4-py3-none-any.whl", hash = "sha256:5dd579377f9f5546893bc26315ab1f846933dc27a054764b168f141065ca8436", size = 29184, upload-time = "2024-11-10T21:57:58.448Z" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1394,6 +1368,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/87/f9/c1eb8635a24e87ade2efce21e3ce8cd6b8630bb685ddc9cdaca1349b2eb5/isort-5.13.2.tar.gz", hash = "sha256:48fdfcb9face5d58a4f6dde2e72a1fb8dcaf8ab26f95ab49fab84c2ddefb0109", size = 175303, upload-time = "2023-12-13T20:37:26.124Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/b3/8def84f539e7d2289a02f0524b944b15d7c75dab7628bedf1c4f0992029c/isort-5.13.2-py3-none-any.whl", hash = "sha256:8ca5e72a8d85860d5a3fa69b8745237f2939afe12dbf656afbcb47fe72d947a6", size = 92310, upload-time = "2023-12-13T20:37:23.244Z" },
+]
+
+[[package]]
+name = "iterators"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/02/c4/135b5bdb9f14f728fe1274361b336f77c5f1606af9a5622a765fe75f5fa0/iterators-0.2.0.tar.gz", hash = "sha256:e9927a1ea1ef081830fd1512f3916857c36bd4b37272819a6cd29d0f44431b97", size = 4284, upload-time = "2023-01-23T16:07:02.46Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bd/a1/9c29772ac9f3bdf9837c92ba5c1fc93f75da14c2e0c3fc41e10485f68feb/iterators-0.2.0-py3-none-any.whl", hash = "sha256:1d7ff03f576c9de0e01bac66209556c066d6b1fc45583a99cfc9f4645be7900e", size = 5022, upload-time = "2023-01-23T16:07:00.352Z" },
 ]
 
 [[package]]
@@ -2532,18 +2515,6 @@ wheels = [
 ]
 
 [[package]]
-name = "piper-tts"
-version = "1.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "onnxruntime" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a9/cd/e083fe52c04f73f03be865440eb2811845e0ad51221d8d1b9404b6dfcc5b/piper_tts-1.4.0.tar.gz", hash = "sha256:c13a0dd1854b5d14e6ffb101c920619a0b1981c758306a70fc88a8d6929769c9", size = 4364720, upload-time = "2026-01-30T17:00:04.135Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/1a/6799fddb0677c74db66836816587e5e76fef41b97068731eba5a7c728685/piper_tts-1.4.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3269b0a285287daa063b85be168d5c7f584e0b228cbb3b6b7ca547f42e0c7a7b", size = 13841873, upload-time = "2026-01-30T17:00:01.196Z" },
-]
-
-[[package]]
 name = "platformdirs"
 version = "4.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3344,6 +3315,21 @@ wheels = [
 ]
 
 [[package]]
+name = "silero-vad"
+version = "6.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "onnxruntime" },
+    { name = "packaging" },
+    { name = "torch" },
+    { name = "torchaudio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/00/4d/0a03f56a4946114c8fa25bd66cafe75bd5807fb73c3bfad2a7603597c4d1/silero_vad-6.2.0.tar.gz", hash = "sha256:27f90e994bc57fdf3d0d1a25f70f65d81854c11974a4f911f7e61792e7a893fd", size = 14569087, upload-time = "2025-11-06T08:39:09.333Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/76/12cbd574562511a8914731436b6c584112186bb6bf149e9f952af4940146/silero_vad-6.2.0-py3-none-any.whl", hash = "sha256:8a31f1e58e73cdc20820d842f757e678e0ae1b0ee1cb7b8aa50f20f8fd7f7638", size = 6118499, upload-time = "2025-11-06T08:39:07.856Z" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3851,10 +3837,25 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/54/a2ba279afcca44bbd320d4e73675b282fcee3d81400ea1b53934efca6462/torch-2.10.0-2-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:13ec4add8c3faaed8d13e0574f5cd4a323c11655546f91fbe6afa77b57423574", size = 79498202, upload-time = "2026-02-10T21:44:52.603Z" },
     { url = "https://files.pythonhosted.org/packages/cc/af/758e242e9102e9988969b5e621d41f36b8f258bb4a099109b7a4b4b50ea4/torch-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:5fd4117d89ffd47e3dcc71e71a22efac24828ad781c7e46aaaf56bf7f2796acf", size = 145996088, upload-time = "2026-01-21T16:24:44.171Z" },
     { url = "https://files.pythonhosted.org/packages/23/8e/3c74db5e53bff7ed9e34c8123e6a8bfef718b2450c35eefab85bb4a7e270/torch-2.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:787124e7db3b379d4f1ed54dd12ae7c741c16a4d29b49c0226a89bea50923ffb", size = 915711952, upload-time = "2026-01-21T16:23:53.503Z" },
     { url = "https://files.pythonhosted.org/packages/6e/01/624c4324ca01f66ae4c7cd1b74eb16fb52596dce66dbe51eff95ef9e7a4c/torch-2.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:2c66c61f44c5f903046cc696d088e21062644cbe541c7f1c4eaae88b2ad23547", size = 113757972, upload-time = "2026-01-21T16:24:39.516Z" },
     { url = "https://files.pythonhosted.org/packages/c9/5c/dee910b87c4d5c0fcb41b50839ae04df87c1cfc663cf1b5fca7ea565eeaa/torch-2.10.0-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:6d3707a61863d1c4d6ebba7be4ca320f42b869ee657e9b2c21c736bf17000294", size = 79498198, upload-time = "2026-01-21T16:24:34.704Z" },
+]
+
+[[package]]
+name = "torchaudio"
+version = "2.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "torch" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0f/36/28a6f3e857616cf7576bdbf8170e483b8c5d0a1f8d349ecb2b75921236aa/torchaudio-2.10.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:9d0fbdbfd2f621c51d28571050d6d0c7287791034e5c7303b31480af1258f33f", size = 737144, upload-time = "2026-01-21T16:28:44.189Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/3f/df620439a76ece170472d41438d11a1545d5db5dc9f1eaeab8c6e055a328/torchaudio-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:42b148a0921a3721abd1f6ae098b1ec9f89703e555c4f7a0d44da87b8decbcb9", size = 391973, upload-time = "2026-01-21T16:28:39.732Z" },
+    { url = "https://files.pythonhosted.org/packages/98/25/e55a30d7138f8fe56ed006df25b0a3c27681f0ec7bc9989e1778e6d559c3/torchaudio-2.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:0e77b2956448d63790a99beed0b74ac8b8cd3a94dcdd9ad01974411078f46278", size = 1895234, upload-time = "2026-01-21T16:28:37.034Z" },
+    { url = "https://files.pythonhosted.org/packages/be/a0/da53c7d20fac15f66f8838653b91162de1bf21fb40fee88cf839e4ef5174/torchaudio-2.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:7f76a01ecebf1869e1f2c50a261f1cf07e5fccb24402b4e9bbb82d6725b9c7dd", size = 475470, upload-time = "2026-01-21T16:28:40.615Z" },
 ]
 
 [[package]]
@@ -4107,23 +4108,20 @@ dependencies = [
     { name = "alembic" },
     { name = "arq" },
     { name = "bcrypt" },
+    { name = "cartesia" },
     { name = "chromadb" },
     { name = "crewai" },
     { name = "crewai-tools" },
     { name = "cryptography" },
     { name = "deepgram-sdk" },
-    { name = "edge-tts" },
-    { name = "elevenlabs" },
     { name = "fastapi" },
     { name = "fastapi-crudrouter" },
     { name = "greenlet" },
     { name = "groq" },
-    { name = "gtts" },
     { name = "langchain-groq" },
     { name = "loguru" },
     { name = "miniaudio" },
     { name = "numpy" },
-    { name = "piper-tts" },
     { name = "plivo" },
     { name = "prometheus-client" },
     { name = "pydantic-settings" },
@@ -4133,6 +4131,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "redis", extra = ["hiredis"] },
     { name = "sentence-transformers" },
+    { name = "silero-vad" },
     { name = "sounddevice" },
     { name = "soundfile" },
     { name = "soxr" },
@@ -4177,6 +4176,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.14.0,<2" },
     { name = "arq", specifier = ">=0.26.0,<0.27" },
     { name = "bcrypt", specifier = ">=4.2.0,<5" },
+    { name = "cartesia", specifier = ">=1.3.0,<2" },
     { name = "chromadb", specifier = ">=0.5.0,<1" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "crewai", specifier = ">=0.86.0,<1" },
@@ -4184,19 +4184,15 @@ requires-dist = [
     { name = "cryptography", specifier = ">=44.0.0,<45" },
     { name = "datamodel-code-generator", marker = "extra == 'dev'", specifier = ">=0.26.0,<0.27" },
     { name = "deepgram-sdk", specifier = ">=3.7.0,<4" },
-    { name = "edge-tts", specifier = ">=6.1.0,<7" },
-    { name = "elevenlabs", specifier = ">=2.33.1" },
     { name = "fastapi", specifier = ">=0.115.0,<0.116" },
     { name = "fastapi-crudrouter", specifier = ">=0.8.0,<0.9" },
     { name = "greenlet", specifier = ">=3.0.0" },
     { name = "groq", specifier = ">=0.13.0,<1" },
-    { name = "gtts", specifier = ">=2.5.4" },
     { name = "langchain-groq", specifier = ">=0.2.0,<1" },
     { name = "loguru", specifier = ">=0.7.0,<0.8" },
     { name = "miniaudio", specifier = ">=1.59,<2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.0" },
     { name = "numpy", specifier = ">=2.0.0,<3" },
-    { name = "piper-tts", specifier = ">=1.2.0,<2" },
     { name = "plivo", specifier = ">=4.55.0,<5" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "prometheus-client", specifier = ">=0.21.0,<0.22" },
@@ -4209,6 +4205,7 @@ requires-dist = [
     { name = "redis", extras = ["hiredis"], specifier = ">=5.0.0,<6" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "sentence-transformers", specifier = ">=3.0.0,<4" },
+    { name = "silero-vad", specifier = ">=6.0" },
     { name = "sounddevice", specifier = ">=0.5.5" },
     { name = "sounddevice", marker = "extra == 'dev'", specifier = ">=0.5.0,<0.6" },
     { name = "soundfile", specifier = ">=0.12.0,<0.13" },

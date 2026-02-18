@@ -82,9 +82,6 @@ async def detailed_health_check(
     )
     checks["plivo"] = "configured" if settings.plivo_auth_id else "missing"
 
-    # Feature flags
-    checks["edge_tts"] = "enabled" if settings.edge_tts_enabled else "disabled"
-
     # Overall status
     status = "healthy" if checks["database"] == "ok" else "degraded"
 

@@ -354,35 +354,3 @@ def resample_audio(
     return converted
 
 
-def compute_audio_energy(audio_bytes: bytes, sample_width: int = 2) -> float:
-    """Compute RMS energy of audio for VAD.
-
-    Args:
-        audio_bytes: PCM audio bytes
-        sample_width: Bytes per sample
-
-    Returns:
-        RMS energy value (0.0 to 32767.0 for 16-bit audio)
-    """
-    if not audio_bytes:
-        return 0.0
-    return float(audioop.rms(audio_bytes, sample_width))
-
-
-def is_speech(
-    audio_bytes: bytes,
-    threshold: float = 500.0,
-    sample_width: int = 2,
-) -> bool:
-    """Simple energy-based voice activity detection.
-
-    Args:
-        audio_bytes: PCM audio bytes
-        threshold: Energy threshold for speech detection
-        sample_width: Bytes per sample
-
-    Returns:
-        True if audio likely contains speech
-    """
-    energy = compute_audio_energy(audio_bytes, sample_width)
-    return energy > threshold

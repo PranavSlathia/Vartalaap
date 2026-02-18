@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from src.agents.config import AssistantConfig
 from src.core.context import ConversationManager
 from src.core.conversation_state import ConversationPhase, ConversationState
 from src.db.repositories.businesses import AsyncBusinessRepository
@@ -57,8 +58,10 @@ class CallSession:
     caller_id_hash: str | None = None
     greeting_text: str | None = None  # Custom greeting from Business config
     call_start: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Per-business config; overrides global settings when set
+    assistant_config: AssistantConfig | None = None
 
-    # Services (initialized in __post_init__)
+    # Services (initialized in __post_init__ — overridden if assistant_config provided)
     _llm: GroqService = field(default_factory=GroqService, init=False, repr=False)
     _stt: DeepgramService = field(default_factory=DeepgramService, init=False, repr=False)
     _conversation: ConversationManager = field(init=False, repr=False)
@@ -69,6 +72,7 @@ class CallSession:
     _business: Business | None = field(default=None, init=False, repr=False)
     _voice_profile: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     _rag_profile: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+    _disable_business_context_load: bool = field(default=False, init=False, repr=False)
 
     # Caller info for reservation creation
     caller_phone_encrypted: str | None = None
@@ -83,6 +87,15 @@ class CallSession:
     detected_language: DetectedLanguage = field(default=DetectedLanguage.UNKNOWN, init=False)
 
     def __post_init__(self) -> None:
+        # Apply AssistantConfig overrides before constructing dependent services.
+        if self.assistant_config is not None:
+            cfg = self.assistant_config
+            self._llm = GroqService(model=cfg.llm.model)
+            self._stt = DeepgramService(utterance_end_ms=cfg.stt.endpointing_ms)
+            # first_message takes priority over any DB-loaded greeting
+            if self.greeting_text is None:
+                self.greeting_text = cfg.first_message
+
         self._conversation = ConversationManager(
             business_id=self.business_id,
             max_history=10,
@@ -91,6 +104,9 @@ class CallSession:
 
     async def load_business_context(self) -> None:
         """Load live business settings from DB into the conversation context."""
+        if self._disable_business_context_load:
+            return
+
         try:
             async with get_session_context() as db_session:
                 repo = AsyncBusinessRepository(db_session)
@@ -108,6 +124,19 @@ class CallSession:
             self._rag_profile = self._parse_json_dict(business.rag_profile_json)
 
         except Exception as e:
+            message = str(e)
+            if (
+                "no such column: businesses.voice_profile_json" in message
+                or "no such column: businesses.rag_profile_json" in message
+            ):
+                self._disable_business_context_load = True
+                logger.warning(
+                    "Business context disabled for this session because DB schema is outdated. "
+                    "Run migrations to add businesses.voice_profile_json "
+                    "and businesses.rag_profile_json."
+                )
+                return
+
             logger.warning(f"Failed to load business context for {self.business_id}: {e}")
 
     async def retrieve_knowledge_for_turn(self, transcript: str) -> KnowledgeResult | None:

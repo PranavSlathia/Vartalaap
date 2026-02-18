@@ -29,6 +29,20 @@
             color: #888;
             font-size: 14px;
         }
+
+        /* Session stats bar */
+        .session-stats {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #666;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+        .stat-sep { color: #3a3a59; }
+
         .chat-container {
             background: #1e1e30;
             border-radius: 16px;
@@ -104,6 +118,29 @@
             font-size: 11px;
             color: #666;
             margin-top: 4px;
+        }
+
+        /* Language badge on user messages */
+        .lang-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-family: monospace;
+            background: #2d2d44;
+            color: #8d8daa;
+            border-radius: 3px;
+            padding: 1px 5px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        /* Per-turn metrics row below bot messages */
+        .metrics-row {
+            font-size: 10px;
+            font-family: monospace;
+            color: #484860;
+            margin-top: 4px;
+            padding-left: 4px;
+            max-width: 85%;
         }
 
         /* Voice indicator */
@@ -242,63 +279,34 @@
 <body>
     <div class="container">
         <header>
-            <h1>🍽️ Himalayan Kitchen</h1>
+            <h1 id="businessTitle">Vartalaap Voice Bot</h1>
             <p>Voice Assistant - Hands-free conversation</p>
+            <!-- Session stats: Turn N • M:SS • HI/EN -->
+            <div id="sessionStats" class="session-stats" style="display:none;">
+                <span id="statTurns">Turn 0</span>
+                <span class="stat-sep">•</span>
+                <span id="statTime">0:00</span>
+                <span class="stat-sep">•</span>
+                <span id="statLang">—</span>
+            </div>
         </header>
 
         <div class="tts-controls">
-            <h3>Voice Model Toggle (Test Mode)</h3>
+            <h3>Settings</h3>
             <div class="tts-grid">
                 <div class="tts-field">
-                    <label for="presetSelect">Preset</label>
-                    <select id="presetSelect">
-                        <option value="auto_quality">Auto Quality</option>
-                        <option value="elevenlabs_multilingual">ElevenLabs Multilingual</option>
-                        <option value="edge_hindi">Edge Hindi Neural</option>
-                        <option value="piper_local">Piper Local</option>
-                        <option value="gtts_fallback">gTTS Fallback</option>
-                        <option value="manual">Manual</option>
+                    <label>Voice Engine</label>
+                    <div style="height:34px;border-radius:8px;border:1px solid #3a3a59;background:#262640;color:#f4f4ff;padding:0 10px;font-size:13px;display:flex;align-items:center;">Cartesia Sonic</div>
+                </div>
+                <div class="tts-field">
+                    <label for="responseModeSelect">Reply Mode</label>
+                    <select id="responseModeSelect">
+                        <option value="echo">Fast Echo</option>
+                        <option value="agent">Full Assistant (Slower)</option>
                     </select>
-                </div>
-                <div class="tts-field">
-                    <label for="providerSelect">Provider</label>
-                    <select id="providerSelect">
-                        <option value="auto">auto</option>
-                        <option value="elevenlabs">elevenlabs</option>
-                        <option value="edge">edge</option>
-                        <option value="piper">piper</option>
-                        <option value="gtts">gtts</option>
-                    </select>
-                </div>
-                <div class="tts-field">
-                    <label for="modelSelect">ElevenLabs Model</label>
-                    <select id="modelSelect">
-                        <option value="">default</option>
-                        <option value="eleven_multilingual_v2">eleven_multilingual_v2</option>
-                        <option value="eleven_flash_v2_5">eleven_flash_v2_5</option>
-                        <option value="eleven_turbo_v2_5">eleven_turbo_v2_5</option>
-                    </select>
-                </div>
-                <div class="tts-field">
-                    <label for="voiceIdInput">ElevenLabs Voice ID</label>
-                    <input id="voiceIdInput" value="9BWtsMINqrJLrRacOk9x" />
-                </div>
-                <div class="tts-field">
-                    <label for="edgeVoiceSelect">Edge Voice</label>
-                    <select id="edgeVoiceSelect">
-                        <option value="">default</option>
-                        <option value="hi-IN-SwaraNeural">hi-IN-SwaraNeural</option>
-                        <option value="hi-IN-MadhurNeural">hi-IN-MadhurNeural</option>
-                        <option value="en-IN-NeerjaNeural">en-IN-NeerjaNeural</option>
-                        <option value="en-IN-PrabhatNeural">en-IN-PrabhatNeural</option>
-                    </select>
-                </div>
-                <div class="tts-field">
-                    <label for="piperVoiceInput">Piper Voice</label>
-                    <input id="piperVoiceInput" value="hi_IN-priyamvada-medium" />
                 </div>
             </div>
-            <p class="tts-note">Changes apply immediately to greetings and every next response.</p>
+            <p class="tts-note">Cartesia Sonic with auto language detection (Hindi/English).</p>
         </div>
 
         <div class="chat-container" id="chat"></div>
@@ -329,12 +337,25 @@
     <audio id="audioPlayer"></audio>
 
     <script>
+        // Business ID from URL params (default: himalayan_kitchen)
+        const businessId = new URLSearchParams(window.location.search).get('business_id') ?? 'himalayan_kitchen';
+
         // State
         let isActive = false;
         let isListening = false;
         let isProcessing = false;
         let isSpeaking = false;
-        let sessionId = Date.now().toString();
+        // Bug fix: crypto.randomUUID() instead of Date.now() — no collisions, not guessable
+        let sessionId = crypto.randomUUID();
+
+        // Race condition guard — monotonic counter; stale responses are discarded
+        let currentRequestId = 0;
+
+        // Session stats tracking
+        let turnCount = 0;
+        let sessionStartTime = null;
+        let statsTimer = null;
+        const langCounts = { hi: 0, en: 0 };
 
         // Audio
         let mediaRecorder;
@@ -344,50 +365,11 @@
         let mediaStream;
         let silenceTimer;
         let hasSpoken = false;
-        let lastTtsProviderUsed = 'auto';
 
         // Settings
         const SILENCE_THRESHOLD = 0.015;
         const SILENCE_DURATION = 1200;  // 1.2 seconds
         const MIN_SPEECH_TIME = 300;
-        const VOICE_PRESETS = {
-            auto_quality: {
-                provider: 'auto',
-                model_id: 'eleven_multilingual_v2',
-                voice_id: '9BWtsMINqrJLrRacOk9x',
-                edge_voice: 'hi-IN-SwaraNeural',
-                piper_voice: 'hi_IN-priyamvada-medium',
-            },
-            elevenlabs_multilingual: {
-                provider: 'elevenlabs',
-                model_id: 'eleven_multilingual_v2',
-                voice_id: '9BWtsMINqrJLrRacOk9x',
-                edge_voice: '',
-                piper_voice: '',
-            },
-            edge_hindi: {
-                provider: 'edge',
-                model_id: '',
-                voice_id: '',
-                edge_voice: 'hi-IN-SwaraNeural',
-                piper_voice: '',
-            },
-            piper_local: {
-                provider: 'piper',
-                model_id: '',
-                voice_id: '',
-                edge_voice: '',
-                piper_voice: 'hi_IN-priyamvada-medium',
-            },
-            gtts_fallback: {
-                provider: 'gtts',
-                model_id: '',
-                voice_id: '',
-                edge_voice: '',
-                piper_voice: '',
-            },
-            manual: null,
-        };
 
         // Elements
         const orb = document.getElementById('orb');
@@ -398,38 +380,86 @@
         const toggleBtn = document.getElementById('toggleBtn');
         const audioPlayer = document.getElementById('audioPlayer');
         const bars = volumeBars.querySelectorAll('.volume-bar');
-        const presetSelect = document.getElementById('presetSelect');
-        const providerSelect = document.getElementById('providerSelect');
-        const modelSelect = document.getElementById('modelSelect');
-        const voiceIdInput = document.getElementById('voiceIdInput');
-        const edgeVoiceSelect = document.getElementById('edgeVoiceSelect');
-        const piperVoiceInput = document.getElementById('piperVoiceInput');
+        const responseModeSelect = document.getElementById('responseModeSelect');
 
-        function applyPreset(presetKey) {
-            const preset = VOICE_PRESETS[presetKey];
-            if (!preset) return;
-            providerSelect.value = preset.provider;
-            modelSelect.value = preset.model_id;
-            voiceIdInput.value = preset.voice_id;
-            edgeVoiceSelect.value = preset.edge_voice;
-            piperVoiceInput.value = preset.piper_voice;
-        }
-
-        presetSelect.addEventListener('change', () => {
-            applyPreset(presetSelect.value);
+        // Bug fix 1: sendBeacon on tab close/kill — fires even when page is killed
+        // (pagehide fires reliably; unload/beforeunload do not on mobile/modern browsers)
+        window.addEventListener('pagehide', () => {
+            if (sessionId && isActive) {
+                const payload = JSON.stringify({ session_id: sessionId });
+                navigator.sendBeacon(
+                    '/api/voice/end-session',
+                    new Blob([payload], { type: 'application/json' })
+                );
+            }
         });
 
-        function getTtsSelection() {
-            return {
-                provider: providerSelect.value || 'auto',
-                model_id: modelSelect.value || null,
-                voice_id: voiceIdInput.value.trim() || null,
-                edge_voice: edgeVoiceSelect.value || null,
-                piper_voice: piperVoiceInput.value.trim() || null,
-            };
+        // Also stop cleanly when tab goes to background
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden' && isActive) {
+                stopConversation();
+            }
+        });
+
+        function getMicErrorDetails(err) {
+            const name = err?.name || 'UnknownError';
+            const message = err?.message || String(err || '');
+            const inIframe = window.self !== window.top;
+
+            if (name === 'NotAllowedError' || name === 'SecurityError') {
+                if (inIframe) {
+                    return `Microphone blocked (${name}). This usually happens when iframe mic permission is not delegated. Open /voice directly in a new tab and allow microphone.`;
+                }
+                return `Microphone blocked (${name}). Allow mic in browser site settings for this origin, then reload.`;
+            }
+
+            if (name === 'NotFoundError') {
+                return 'No microphone found. Connect a mic and retry.';
+            }
+
+            if (name === 'NotReadableError') {
+                return 'Microphone is busy in another app/tab. Close other apps and retry.';
+            }
+
+            if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                return 'Microphone requires HTTPS on non-localhost origins.';
+            }
+
+            return `Microphone error (${name}): ${message}`;
         }
 
-        applyPreset('auto_quality');
+        async function fetchJsonWithRetry(url, options, retries = 1) {
+            let lastError = null;
+
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 45000);
+
+                try {
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal,
+                    });
+                    clearTimeout(timeout);
+
+                    const data = await response.json();
+                    if (!response.ok) {
+                        const serverMessage = data?.error || `HTTP ${response.status}`;
+                        throw new Error(serverMessage);
+                    }
+                    return data;
+                } catch (err) {
+                    clearTimeout(timeout);
+                    lastError = err;
+                    if (attempt >= retries) {
+                        throw err;
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+                }
+            }
+
+            throw lastError || new Error('Network request failed');
+        }
 
         // Audio player events
         audioPlayer.onended = () => {
@@ -471,31 +501,53 @@
                 isActive = true;
                 toggleBtn.textContent = 'End Call';
 
-                // Play greeting and then start listening
+                // Reset and show session stats
+                turnCount = 0;
+                sessionStartTime = Date.now();
+                langCounts.hi = 0;
+                langCounts.en = 0;
+                updateStats();
+                document.getElementById('sessionStats').style.display = 'flex';
+                statsTimer = setInterval(updateStats, 1000);
+
                 setProcessingState();
                 status.textContent = 'Starting conversation...';
 
-                // Generate and play greeting
-                const greeting = "Namaste! Himalayan Kitchen mein aapka swagat hai. Main aapki kya madad kar sakti hoon?";
-                addMessage('bot', greeting);
+                // Fetch greeting from business API; fall back to default
+                let greeting = 'Namaste! Main aapki kaise madad kar sakti hoon?';
+                try {
+                    const r = await fetch(`/api/business/${businessId}`);
+                    if (r.ok) {
+                        const biz = await r.json();
+                        if (biz.greeting_text) greeting = biz.greeting_text;
+                        if (biz.name) document.getElementById('businessTitle').textContent = biz.name;
+                    }
+                } catch (_) { /* use default */ }
 
+                addMessage('bot', greeting);
                 const audioUrl = await generateTTS(greeting);
                 if (audioUrl) {
                     playSpeech(audioUrl);
                 } else {
-                    // If TTS fails, just start listening
                     startListening();
                 }
 
             } catch (err) {
                 console.error('Mic error:', err);
-                status.textContent = 'Microphone access denied';
+                status.textContent = getMicErrorDetails(err);
                 status.className = 'status-text error';
             }
         }
 
         async function stopConversation() {
+            if (!isActive) return;
             isActive = false;
+
+            if (statsTimer) {
+                clearInterval(statsTimer);
+                statsTimer = null;
+            }
+
             stopListening();
             audioPlayer.pause();
             if (mediaStream) {
@@ -506,11 +558,12 @@
             status.textContent = 'Saving call log...';
 
             // End session on server to persist call log and trigger analysis
+            const sid = sessionId;
             try {
                 const response = await fetch('/api/voice/end-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId }),
+                    body: JSON.stringify({ session_id: sid }),
                 });
                 const data = await response.json();
                 if (data.call_log_id) {
@@ -527,8 +580,14 @@
 
         async function resetConversation() {
             await stopConversation();
-            sessionId = Date.now().toString();
+            // Bug fix: fresh UUID on reset, not timestamp
+            sessionId = crypto.randomUUID();
+            currentRequestId = 0;
+            turnCount = 0;
+            langCounts.hi = 0;
+            langCounts.en = 0;
             chat.innerHTML = '';
+            document.getElementById('sessionStats').style.display = 'none';
             status.textContent = 'Click to start conversation';
         }
 
@@ -559,7 +618,7 @@
             orb.className = 'orb speaking';
             orbText.innerHTML = 'Speaking...';
             volumeBars.style.display = 'none';
-            status.textContent = `Bot is speaking (${lastTtsProviderUsed})...`;
+            status.textContent = 'Bot is speaking (Cartesia Sonic)...';
             status.className = 'status-text';
         }
 
@@ -606,7 +665,7 @@
 
             } catch (err) {
                 console.error('Listen error:', err);
-                status.textContent = 'Microphone error: ' + err.message;
+                status.textContent = getMicErrorDetails(err);
                 status.className = 'status-text error';
             }
         }
@@ -685,8 +744,9 @@
             });
         }
 
-        // Process audio
+        // Process audio — with monotonic request ID to discard stale responses
         async function processAudio(blob) {
+            const myId = ++currentRequestId;
             isProcessing = true;
             setProcessingState();
 
@@ -694,35 +754,42 @@
                 const formData = new FormData();
                 formData.append('audio', blob, 'recording.webm');
                 formData.append('session_id', sessionId);
-                const selection = getTtsSelection();
-                formData.append('tts_provider', selection.provider);
-                if (selection.voice_id) formData.append('tts_voice_id', selection.voice_id);
-                if (selection.model_id) formData.append('tts_model_id', selection.model_id);
-                if (selection.edge_voice) formData.append('tts_edge_voice', selection.edge_voice);
-                if (selection.piper_voice) formData.append('tts_piper_voice', selection.piper_voice);
+                formData.append('response_mode', responseModeSelect.value || 'echo');
+                formData.append('business_id', businessId);
 
-                const response = await fetch('/api/voice/process', {
+                const data = await fetchJsonWithRetry('/api/voice/process', {
                     method: 'POST',
                     body: formData
                 });
 
-                const data = await response.json();
+                // Stale response guard — a newer request is in flight, discard this one
+                if (myId !== currentRequestId) return;
+
+                // STT failure: show specific error instead of generic "couldn't understand"
+                if (data.error === 'stt_failed') {
+                    status.textContent = 'Connection error — retrying...';
+                    status.className = 'status-text error';
+                    if (isActive) setTimeout(() => startListening(), 1500);
+                    return;
+                }
 
                 if (data.transcript) {
-                    addMessage('user', data.transcript);
+                    addMessage('user', data.transcript, data.detected_language);
+                    // Track language for session stats
+                    if (data.detected_language === 'hi') langCounts.hi++;
+                    else if (data.detected_language === 'en') langCounts.en++;
+                    turnCount++;
+                    updateStats();
                 }
 
                 if (data.response) {
-                    addMessage('bot', data.response);
+                    const msgEl = addMessage('bot', data.response);
+                    addMetricsRow(msgEl, data);
 
                     if (data.audio_url) {
-                        if (data.tts_provider_used && data.tts_provider_used !== 'none') {
-                            lastTtsProviderUsed = data.tts_provider_used;
-                        }
                         playSpeech(data.audio_url);
-                    } else {
-                        // No audio, start listening again
-                        if (isActive) startListening();
+                    } else if (isActive) {
+                        startListening();
                     }
                 } else if (data.error) {
                     status.textContent = data.error;
@@ -733,35 +800,24 @@
                 }
 
             } catch (err) {
+                if (myId !== currentRequestId) return;
                 console.error('Process error:', err);
-                status.textContent = 'Error: ' + err.message;
+                status.textContent = `Error: ${err?.message || err}`;
                 status.className = 'status-text error';
                 if (isActive) setTimeout(() => startListening(), 1000);
             } finally {
-                isProcessing = false;
+                if (myId === currentRequestId) isProcessing = false;
             }
         }
 
         // TTS
         async function generateTTS(text) {
             try {
-                const selection = getTtsSelection();
-                const response = await fetch('/api/voice/tts', {
+                const data = await fetchJsonWithRetry('/api/voice/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        text,
-                        provider: selection.provider,
-                        voice_id: selection.voice_id,
-                        model_id: selection.model_id,
-                        edge_voice: selection.edge_voice,
-                        piper_voice: selection.piper_voice,
-                    })
+                    body: JSON.stringify({ text })
                 });
-                const data = await response.json();
-                if (data.tts_provider_used && data.tts_provider_used !== 'none') {
-                    lastTtsProviderUsed = data.tts_provider_used;
-                }
                 return data.audio_url;
             } catch (err) {
                 console.error('TTS error:', err);
@@ -780,16 +836,67 @@
             });
         }
 
-        // Messages
-        function addMessage(role, text) {
+        // Messages — returns the created div element
+        function addMessage(role, text, lang) {
             const div = document.createElement('div');
             div.className = `message ${role}`;
+
+            let contentHtml = escapeHtml(text);
+            if (role === 'user' && lang) {
+                const badge = lang.toUpperCase();
+                contentHtml = `<span class="lang-badge">${badge}</span>${contentHtml}`;
+            }
+
             div.innerHTML = `
-                <div class="message-content">${escapeHtml(text)}</div>
+                <div class="message-content">${contentHtml}</div>
                 <div class="message-meta">${new Date().toLocaleTimeString()}</div>
             `;
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
+            return div;
+        }
+
+        // Append per-turn latency metrics below a message element
+        function addMetricsRow(msgEl, data) {
+            const parts = [];
+            if (data.stt_latency_ms != null) parts.push(`STT ${Math.round(data.stt_latency_ms)}ms`);
+            if (data.llm_first_token_ms != null) parts.push(`LLM ${Math.round(data.llm_first_token_ms)}ms`);
+            if (data.tts_first_chunk_ms != null) parts.push(`TTS ${Math.round(data.tts_first_chunk_ms)}ms`);
+            if (data.total_ms != null) parts.push(`Total ${Math.round(data.total_ms)}ms`);
+            if (data.stt_confidence != null) {
+                const pct = Math.round(data.stt_confidence * 100);
+                const lang = data.detected_language ? ` ${data.detected_language.toUpperCase()}` : '';
+                parts.push(`${pct}%${lang}`);
+            }
+
+            if (parts.length === 0) return;
+
+            const row = document.createElement('div');
+            row.className = 'metrics-row';
+            row.textContent = parts.join('  •  ');
+            msgEl.appendChild(row);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        // Update the session stats bar
+        function updateStats() {
+            if (!sessionStartTime) return;
+
+            const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+            const totalLang = langCounts.hi + langCounts.en;
+            let dominantLang = '—';
+            if (totalLang > 0) {
+                dominantLang = langCounts.hi >= langCounts.en ? 'HI' : 'EN';
+            }
+
+            const n = turnCount;
+            document.getElementById('statTurns').textContent = `Turn ${n}`;
+            document.getElementById('statTime').textContent = timeStr;
+            document.getElementById('statLang').textContent = dominantLang;
         }
 
         function escapeHtml(text) {

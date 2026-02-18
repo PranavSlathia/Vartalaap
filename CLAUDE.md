@@ -28,7 +28,7 @@ Existing solutions (Retell, etc.) are expensive and have poor Hindi voice qualit
 ## Tech Stack Summary
 
 ```
-Python 3.12 + FastAPI + SQLModel + Piper TTS + Deepgram STT + Groq LLM + Plivo
+Python 3.12 + FastAPI + SQLModel + Cartesia TTS + Deepgram STT + Groq LLM + Plivo
 Docker + Caddy + Redis (arq) + SQLite
 Codegen: datamodel-codegen + fastapi-crudrouter + alembic
 ```
@@ -37,10 +37,10 @@ Codegen: datamodel-codegen + fastapi-crudrouter + alembic
 |-------|------------|
 | **API** | FastAPI 0.115.x, uvicorn, WebSockets |
 | **Database** | SQLite + SQLModel + Alembic migrations |
-| **STT** | Deepgram (streaming, Hindi support) |
-| **LLM** | Groq (llama-3.3-70b-versatile, streaming) |
-| **TTS** | Piper (primary, self-hosted) / Edge TTS (fallback, feature-flagged) |
-| **Telephony** | Plivo (WebSocket audio streams) |
+| **STT** | Deepgram nova-2 (streaming, `language=hi`, pre-warmed WebSocket) |
+| **LLM** | Groq llama-3.3-70b-versatile (streaming, <100ms first token) |
+| **TTS** | Cartesia sonic-multilingual (~90ms TTFB, native Hindi, WebSocket streaming) |
+| **Telephony** | Plivo (WebSocket audio streams, 8kHz μ-law) |
 | **Background Tasks** | arq + Redis |
 | **QA Agents** | CrewAI + langchain-groq (transcript analysis) |
 | **Admin UI** | Streamlit on subdomain |
@@ -52,15 +52,52 @@ Codegen: datamodel-codegen + fastapi-crudrouter + alembic
 
 | Document | Purpose |
 |----------|---------|
+| [.claude/soul.md](.claude/soul.md) | **Read first.** What this is, competitive position, what we optimize for |
+| [.claude/roadmap.md](.claude/roadmap.md) | **Strategic evolution plan.** Phases 1–6, priority order, what to steal from Vapi |
 | [docs/PRD.md](docs/PRD.md) | Product requirements, user flows, success metrics |
 | [docs/TECH_STACK.md](docs/TECH_STACK.md) | Complete technical specification (v1.2) |
-| [.claude/skills/README.md](.claude/skills/README.md) | Skills index and quick commands |
+| [.claude/skills/README.md](.claude/skills/README.md) | Skills index — which skill for which work |
+
+---
+
+## Agent Team
+
+Four-tier subagent team in `.claude/agents/` (all claude-opus-4-6):
+
+### Tier 1 — Orchestration
+| Agent | Role |
+|-------|------|
+| `lead` | Master architect. Reads soul.md + roadmap.md first. Routes to domain leads. Never implements directly. |
+
+### Tier 2 — Domain Leads (Design & Decide)
+| Agent | Owns |
+|-------|------|
+| `voice-lead` | Voice quality, STT config, TTS selection, latency strategy, VAD thresholds, barge-in design |
+| `platform-lead` | DB schema, API contracts, security patterns, migration strategy, background jobs |
+| `product-lead` | Operator UX (Streamlit admin), developer DX (React/Orval), business onboarding experience |
+
+### Tier 3 — Implementers (Write Code)
+| Agent | Implements |
+|-------|-----------|
+| `pipeline-coder` | Frame-based pipeline, VAD, streaming LLM→TTS, state machine, audio resampling |
+| `squads-coder` | AssistantConfig, tool registry, squad routing, filler phrases |
+| `backend-coder` | FastAPI routes, DB models, Alembic migrations, arq background jobs, security functions |
+| `frontend-coder` | React components, pages, TanStack Query hooks (never touches generated `web/src/api/`) |
+| `devops-coder` | Docker Compose, Caddy, deployment scripts, env var management |
+
+### Tier 4 — Guards (Read-Only Review)
+| Agent | Reviews |
+|-------|---------|
+| `code-reviewer` | Code quality, architecture conformance, PII safety, test coverage |
+| `voice-debugger` | Audio issues, latency regressions, transcription errors, call failures |
+| `security-auditor` | PII handling, cryptography correctness, auth/authz, data retention |
+| `migration-guard` | DB migrations — must sign off before `alembic upgrade head` runs |
 
 ---
 
 ## Skills Reference
 
-Use these slash commands for context-rich assistance:
+Skills are loaded into agents for domain context. Use slash commands directly when working outside an agent:
 
 | Skill | Command | Use When |
 |-------|---------|----------|
@@ -78,9 +115,9 @@ Use these slash commands for context-rich assistance:
 ### Voice Pipeline
 
 ```
-Plivo (8kHz) → Resample → Deepgram STT → Groq LLM → Piper TTS → Resample → Plivo
-     ↑                         ↓              ↓            ↓              ↓
-  WebSocket              Streaming      Streaming     Streaming      WebSocket
+Plivo (8kHz μ-law) → decode+resample → Deepgram STT → Groq LLM → Cartesia TTS → resample+encode → Plivo
+        ↑                16kHz PCM           ↓              ↓          22kHz PCM     8kHz μ-law        ↓
+    WebSocket                           Streaming      Streaming      Streaming                    WebSocket
 ```
 
 **Latency Budget:** P50 < 500ms processing, P95 < 1.2s end-to-end
@@ -194,6 +231,8 @@ Required in `.env`:
 # API Keys
 GROQ_API_KEY=gsk_xxxx
 DEEPGRAM_API_KEY=xxxx
+CARTESIA_API_KEY=xxxx
+CARTESIA_VOICE_ID=xxxx          # from play.cartesia.ai/voices
 PLIVO_AUTH_ID=xxxx
 PLIVO_AUTH_TOKEN=xxxx
 
@@ -201,9 +240,6 @@ PLIVO_AUTH_TOKEN=xxxx
 PHONE_ENCRYPTION_KEY=<64 hex chars>
 PHONE_HASH_PEPPER=<64 hex chars>
 ADMIN_PASSWORD_HASH=<bcrypt hash>
-
-# Feature Flags
-EDGE_TTS_ENABLED=false
 ```
 
 ---

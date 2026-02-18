@@ -72,6 +72,8 @@ services:
     environment:
       # Browser-facing URLs (localhost for user's browser)
       - VITE_API_URL=http://localhost:8000
+      # Container-internal URL for Vite dev proxy (/api, /voice)
+      - VITE_API_PROXY_URL=http://api:8000
       - VITE_KEYCLOAK_URL=http://localhost:8080
       - VITE_KEYCLOAK_REALM=vartalaap
       - VITE_KEYCLOAK_CLIENT_ID=vartalaap-web

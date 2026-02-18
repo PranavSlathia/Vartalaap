@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from src.agents.config import AssistantConfig
 from src.config import Settings, get_settings
 from src.core.pipeline import AudioSender, VoicePipeline
 from src.core.session import CallSession
@@ -68,6 +69,7 @@ class CallSessionRegistry:
         caller_phone_encrypted: str | None = None,
         greeting_text: str | None = None,
         settings: Settings | None = None,
+        assistant_config: AssistantConfig | None = None,
     ) -> tuple[CallSession, VoicePipeline]:
         """Create a new call session.
 
@@ -97,8 +99,13 @@ class CallSessionRegistry:
                 caller_id_hash=caller_id_hash,
                 caller_phone_encrypted=caller_phone_encrypted,
                 greeting_text=greeting_text,
+                assistant_config=assistant_config,
             )
-            pipeline = VoicePipeline(session, settings=settings)
+            pipeline = VoicePipeline(
+                session,
+                settings=settings,
+                assistant_config=assistant_config,
+            )
 
             self._sessions[call_id] = CallSessionEntry(
                 session=session,
@@ -371,8 +378,19 @@ async def _cleanup_call(
                     transcript=metrics.get("transcript"),
                     duration_seconds=int(metrics.get("duration_seconds", 0)),
                     detected_language=entry.session.detected_language,
+                    stt_latency_p50_ms=metrics.get("p50_first_word_ms") or None,
+                    llm_latency_p50_ms=metrics.get("p50_first_token_ms") or None,
+                    tts_latency_p50_ms=metrics.get("p50_tts_first_chunk_ms") or None,
+                    barge_in_count=metrics.get("barge_in_count", 0),
+                    total_turns=metrics.get("total_turns", 0),
                 )
                 await db_session.commit()
-                logger.info(f"Persisted call log for {call_id}")
+                logger.info(
+                    f"Persisted call log for {call_id} — "
+                    f"turns={metrics.get('total_turns', 0)}, "
+                    f"STT_p50={metrics.get('p50_first_word_ms', 0):.0f}ms, "
+                    f"LLM_p50={metrics.get('p50_first_token_ms', 0):.0f}ms, "
+                    f"TTS_p50={metrics.get('p50_tts_first_chunk_ms', 0):.0f}ms"
+                )
         except Exception as e:
             logger.error(f"Failed to persist call log: {e}")

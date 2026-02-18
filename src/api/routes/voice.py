@@ -1,6 +1,8 @@
 """Voice API endpoint for browser-based voice testing."""
 
 import asyncio
+import contextlib
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +17,7 @@ from src.core.session import CallSession
 from src.db.models import CallLog, CallOutcome, CallSource
 from src.db.session import get_session_context
 from src.logging_config import get_logger
+from src.services.tts.cartesia import CartesiaTTSService
 
 logger = get_logger(__name__)
 
@@ -22,94 +25,149 @@ router = APIRouter()
 
 # Store sessions in memory (for demo - use Redis in production)
 _sessions: dict[str, CallSession] = {}
+# Track audio files per session for per-session cleanup
+_session_audio_files: dict[str, list[Path]] = {}
 
 # Directory for temp audio files
 AUDIO_DIR = Path("data/audio_cache")
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
+# Browser TTS uses higher sample rate than telephony (8kHz) for better quality
+_BROWSER_SAMPLE_RATE = 22050
+
 NON_PRODUCTION_PARITY_NOTICE = (
     "Browser voice test uses a non-production path and may differ from live telephony quality."
 )
 
-DEFAULT_ELEVENLABS_VOICE_ID = "9BWtsMINqrJLrRacOk9x"
-DEFAULT_ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
-DEFAULT_EDGE_VOICE = "hi-IN-SwaraNeural"
+
+def _cleanup_old_audio_files() -> None:
+    """Delete WAV files older than 24h from audio cache (runs once on startup)."""
+    cutoff = datetime.now(UTC).timestamp() - 86400
+    removed = 0
+    for wav_file in AUDIO_DIR.glob("*.wav"):
+        try:
+            if wav_file.stat().st_mtime < cutoff:
+                wav_file.unlink(missing_ok=True)
+                removed += 1
+        except OSError:
+            pass
+    if removed:
+        logger.info(f"Startup cleanup: removed {removed} stale WAV files from audio cache")
 
 
-class TTSSelection(BaseModel):
-    """Voice test TTS selection sent by the browser UI."""
-
-    provider: Literal["auto", "elevenlabs", "edge", "piper", "gtts"] = "auto"
-    voice_id: str | None = None
-    model_id: str | None = None
-    edge_voice: str | None = None
-    piper_voice: str | None = None
+# Run once on module import (i.e., startup)
+_cleanup_old_audio_files()
 
 
 class TextToSpeechRequest(BaseModel):
     """Request body for direct browser TTS generation."""
 
     text: str = Field(min_length=1)
-    provider: Literal["auto", "elevenlabs", "edge", "piper", "gtts"] = "auto"
-    voice_id: str | None = None
-    model_id: str | None = None
-    edge_voice: str | None = None
-    piper_voice: str | None = None
 
 
-def get_or_create_session(session_id: str) -> CallSession:
-    """Get existing session or create new one."""
+class _TranscriptionResult:
+    """Internal result from STT transcription with metadata."""
+
+    __slots__ = ("transcript", "detected_language", "confidence", "latency_ms")
+
+    def __init__(
+        self,
+        transcript: str,
+        detected_language: str | None = None,
+        confidence: float | None = None,
+        latency_ms: float | None = None,
+    ) -> None:
+        self.transcript = transcript
+        self.detected_language = detected_language
+        self.confidence = confidence
+        self.latency_ms = latency_ms
+
+
+def get_or_create_session(session_id: str, business_id: str = "himalayan_kitchen") -> CallSession:
+    """Get existing session or create a new one.
+
+    Evicts sessions older than 30 minutes before creating to prevent unbounded growth.
+    """
+    now = datetime.now(UTC)
+    stale = [
+        sid
+        for sid, sess in _sessions.items()
+        if (now - sess.call_start).total_seconds() > 1800
+    ]
+    for sid in stale:
+        _sessions.pop(sid, None)
+        _session_audio_files.pop(sid, None)
+
     if session_id not in _sessions:
-        _sessions[session_id] = CallSession(business_id="himalayan_kitchen")
+        _sessions[session_id] = CallSession(business_id=business_id)
     return _sessions[session_id]
 
 
-async def transcribe_webm(audio_data: bytes) -> str:
-    """Transcribe webm audio using Deepgram."""
+async def transcribe_webm(audio_data: bytes) -> _TranscriptionResult:
+    """Transcribe webm audio using Deepgram.
+
+    Returns transcript, language, confidence, and latency.
+    Raises on STT service failure — caller should return HTTP 422.
+    """
     from deepgram import DeepgramClient, PrerecordedOptions
 
-    try:
-        settings = get_settings()
-        client = DeepgramClient(api_key=settings.deepgram_api_key.get_secret_value())
+    t0 = time.perf_counter()
+    settings = get_settings()
+    client = DeepgramClient(api_key=settings.deepgram_api_key.get_secret_value())
 
-        # Send webm directly to Deepgram - they support it natively
-        options = PrerecordedOptions(
-            model="nova-2",
-            language="hi",
-            detect_language=True,
-            smart_format=True,
-            punctuate=True,
-        )
+    options = PrerecordedOptions(
+        model="nova-2",
+        detect_language=True,
+        smart_format=True,
+        punctuate=True,
+    )
 
-        response = await asyncio.to_thread(
-            client.listen.rest.v("1").transcribe_file,
-            {"buffer": audio_data, "mimetype": "audio/webm"},
-            options,
-        )
+    response = await asyncio.to_thread(
+        client.listen.rest.v("1").transcribe_file,
+        {"buffer": audio_data, "mimetype": "audio/webm"},
+        options,
+    )
 
-        # Extract transcript
-        results = response.results
-        if results and results.channels:
-            alternatives = results.channels[0].alternatives
-            if alternatives:
-                transcript: str = alternatives[0].transcript or ""
-                logger.info(f"Transcribed: {transcript[:50]}..." if transcript else "No transcript")
-                return transcript
+    latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+    results = response.results
+    if results and results.channels:
+        channel = results.channels[0]
+        alternatives = channel.alternatives
+        if alternatives:
+            alt = alternatives[0]
+            transcript: str = alt.transcript or ""
+            confidence: float | None = getattr(alt, "confidence", None)
+            detected_language: str | None = getattr(channel, "detected_language", None)
+            logger.info(
+                f"Transcribed ({latency_ms:.0f}ms): {transcript[:50]}..."
+                if transcript
+                else f"No transcript ({latency_ms:.0f}ms)"
+            )
+            return _TranscriptionResult(
+                transcript=transcript,
+                detected_language=detected_language,
+                confidence=confidence,
+                latency_ms=latency_ms,
+            )
 
-        return ""
-
-    except Exception as e:
-        logger.error(f"Transcription error: {e}")
-        return ""
+    return _TranscriptionResult(transcript="", latency_ms=latency_ms)
 
 
-def _save_audio_bytes(audio_bytes: bytes, suffix: str) -> str:
-    """Persist generated audio bytes and return public URL."""
+def _save_audio_bytes(audio_bytes: bytes, suffix: str, session_id: str | None = None) -> str:
+    """Persist generated audio bytes and return public URL.
+
+    Tracks the file path in _session_audio_files if session_id provided,
+    enabling per-session cleanup when the session ends.
+    """
     audio_id = str(uuid.uuid4())[:8]
     filename = f"{audio_id}.{suffix}"
     audio_path = AUDIO_DIR / filename
     with open(audio_path, "wb") as f:
         f.write(audio_bytes)
+
+    if session_id:
+        _session_audio_files.setdefault(session_id, []).append(audio_path)
+
     return f"/api/voice/audio/{filename}"
 
 
@@ -127,228 +185,133 @@ def _pcm16_to_wav_bytes(raw_pcm: bytes, sample_rate: int) -> bytes:
     return wav_buffer.getvalue()
 
 
-def generate_tts_elevenlabs(
-    text: str,
-    *,
-    voice_id: str | None = None,
-    model_id: str | None = None,
-) -> str | None:
-    """Generate TTS using ElevenLabs (realistic Hindi voice)."""
+async def generate_tts_cartesia(
+    text: str, session_id: str | None = None
+) -> tuple[str | None, float | None]:
+    """Generate TTS audio using Cartesia Sonic.
+
+    Returns (audio_url, first_chunk_ms). Both None on failure.
+    """
+    settings = get_settings()
+    service = CartesiaTTSService(
+        api_key=settings.cartesia_api_key.get_secret_value(),
+        voice_id=settings.cartesia_voice_id,
+        model_id=settings.cartesia_model_id,
+    )
     try:
-        settings = get_settings()
+        pcm_chunks: list[bytes] = []
+        first_chunk_ms: float | None = None
+        t0 = time.perf_counter()
+        async for chunk in service.synthesize_stream(
+            text,
+            target_sample_rate=_BROWSER_SAMPLE_RATE,
+        ):
+            if first_chunk_ms is None:
+                first_chunk_ms = round((time.perf_counter() - t0) * 1000, 1)
+            pcm_chunks.append(chunk)
 
-        if not settings.elevenlabs_api_key:
-            logger.warning("ELEVENLABS_API_KEY not set")
-            return None
+        if not pcm_chunks:
+            return None, None
 
-        api_key = settings.elevenlabs_api_key.get_secret_value()
-
-        from elevenlabs import ElevenLabs
-
-        client = ElevenLabs(api_key=api_key)
-
-        audio_generator = client.text_to_speech.convert(
-            text=text,
-            voice_id=voice_id or settings.elevenlabs_voice_id or DEFAULT_ELEVENLABS_VOICE_ID,
-            model_id=model_id or settings.elevenlabs_model_id or DEFAULT_ELEVENLABS_MODEL_ID,
-            output_format="mp3_44100_128",
+        raw_pcm = b"".join(pcm_chunks)
+        wav_bytes = _pcm16_to_wav_bytes(raw_pcm, sample_rate=_BROWSER_SAMPLE_RATE)
+        audio_url = _save_audio_bytes(wav_bytes, "wav", session_id=session_id)
+        logger.info(
+            f"Generated Cartesia TTS: {audio_url} ({len(raw_pcm)} bytes PCM,"
+            f" first_chunk={first_chunk_ms}ms)"
         )
-
-        audio_bytes = b"".join(audio_generator)
-        if not audio_bytes:
-            return None
-
-        audio_url = _save_audio_bytes(audio_bytes, "mp3")
-        logger.info(f"Generated ElevenLabs TTS: {audio_url}")
-        return audio_url
+        return audio_url, first_chunk_ms
 
     except Exception as e:
-        logger.error(f"ElevenLabs TTS error: {e}")
-        return None
+        logger.error(f"Cartesia TTS error: {e}")
+        return None, None
+    finally:
+        await service.close()
 
 
-async def generate_tts_edge(
-    text: str,
-    *,
-    voice: str | None = None,
-) -> str | None:
-    """Generate TTS using Edge neural voices (MP3 output)."""
-    try:
-        import edge_tts
+def _build_voice_compare_response(transcript: str) -> str:
+    """Fast, deterministic response for voice comparison mode."""
+    cleaned = transcript.strip()
+    if not cleaned:
+        return "I could not catch that. Please try once more."
 
-        selected_voice = voice or get_settings().edge_tts_voice or DEFAULT_EDGE_VOICE
-        audio_id = str(uuid.uuid4())[:8]
-        filename = f"{audio_id}.mp3"
-        audio_path = AUDIO_DIR / filename
-
-        communicate = edge_tts.Communicate(text=text, voice=selected_voice)
-        await communicate.save(str(audio_path))
-
-        logger.info(f"Generated Edge TTS: {audio_path}")
-        return f"/api/voice/audio/{filename}"
-    except Exception as e:
-        logger.error(f"Edge TTS error: {e}")
-        return None
-
-
-async def generate_tts_piper(
-    text: str,
-    *,
-    voice_name: str | None = None,
-) -> str | None:
-    """Generate TTS using local Piper model (WAV output)."""
-    try:
-        from src.services.tts.piper import PiperTTSService
-
-        settings = get_settings()
-        target_rate = 16000
-        service = PiperTTSService(
-            settings=settings,
-            voice_name=voice_name or settings.piper_voice,
-        )
-        try:
-            raw_pcm, _metadata = await service.synthesize(
-                text,
-                target_sample_rate=target_rate,
-            )
-        finally:
-            await service.close()
-
-        if not raw_pcm:
-            return None
-
-        wav_bytes = _pcm16_to_wav_bytes(
-            raw_pcm,
-            sample_rate=target_rate,
-        )
-        audio_url = _save_audio_bytes(wav_bytes, "wav")
-        logger.info(f"Generated Piper TTS: {audio_url}")
-        return audio_url
-    except Exception as e:
-        logger.error(f"Piper TTS error: {e}")
-        return None
-
-
-def generate_tts_gtts(text: str) -> str | None:
-    """Generate TTS using Google TTS (fallback)."""
-    try:
-        from gtts import gTTS
-
-        tts = gTTS(text=text, lang="hi", slow=False)
-
-        audio_id = str(uuid.uuid4())[:8]
-        filename = f"{audio_id}.mp3"
-        audio_path = AUDIO_DIR / filename
-        tts.save(str(audio_path))
-
-        logger.info(f"Generated gTTS: {audio_path}")
-        return f"/api/voice/audio/{filename}"
-
-    except Exception as e:
-        logger.error(f"gTTS error: {e}")
-        return None
-
-
-async def generate_tts(text: str, selection: TTSSelection) -> tuple[str | None, str]:
-    """Generate TTS audio using selected provider with fallback chain."""
-    provider = selection.provider
-    chain: list[str]
-
-    if provider == "elevenlabs":
-        chain = ["elevenlabs", "edge", "piper", "gtts"]
-    elif provider == "edge":
-        chain = ["edge", "elevenlabs", "piper", "gtts"]
-    elif provider == "piper":
-        chain = ["piper", "elevenlabs", "edge", "gtts"]
-    elif provider == "gtts":
-        chain = ["gtts"]
-    else:
-        chain = ["elevenlabs", "edge", "piper", "gtts"]
-
-    for candidate in chain:
-        audio_url: str | None = None
-        if candidate == "elevenlabs":
-            audio_url = generate_tts_elevenlabs(
-                text,
-                voice_id=selection.voice_id,
-                model_id=selection.model_id,
-            )
-        elif candidate == "edge":
-            audio_url = await generate_tts_edge(
-                text,
-                voice=selection.edge_voice,
-            )
-        elif candidate == "piper":
-            audio_url = await generate_tts_piper(
-                text,
-                voice_name=selection.piper_voice,
-            )
-        elif candidate == "gtts":
-            audio_url = generate_tts_gtts(text)
-
-        if audio_url:
-            return audio_url, candidate
-
-    return None, "none"
+    has_devanagari = any("\u0900" <= ch <= "\u097F" for ch in cleaned)
+    if has_devanagari:
+        return f"ठीक है, मैंने सुना: {cleaned}"
+    return f"Got it. I heard: {cleaned}"
 
 
 @router.post("/voice/process")
 async def process_voice(
     audio: UploadFile = File(...),
     session_id: str = Form(...),
-    tts_provider: Literal["auto", "elevenlabs", "edge", "piper", "gtts"] = Form("auto"),
-    tts_voice_id: str | None = Form(default=None),
-    tts_model_id: str | None = Form(default=None),
-    tts_edge_voice: str | None = Form(default=None),
-    tts_piper_voice: str | None = Form(default=None),
+    response_mode: Literal["echo", "agent"] = Form(default="echo"),
+    business_id: str = Form(default="himalayan_kitchen"),
 ):
-    """Process voice input and return response with audio."""
+    """Process voice input and return response with audio and full latency breakdown."""
+    t_start = time.perf_counter()
     try:
-        # Read audio data
         audio_data = await audio.read()
         logger.info(f"Received audio: {len(audio_data)} bytes, session: {session_id}")
 
-        # Transcribe
-        transcript = await transcribe_webm(audio_data)
-        if not transcript:
+        # STT — raise so caller returns 422 with specific error
+        try:
+            stt_result = await transcribe_webm(audio_data)
+        except Exception as e:
+            logger.error(f"STT failed for session {session_id}: {e}")
+            return JSONResponse(
+                {"error": "stt_failed", "detail": str(e)},
+                status_code=422,
+            )
+
+        if not stt_result.transcript:
             return JSONResponse({
                 "error": "Could not understand. Please try again.",
                 "transcript": None,
                 "response": None,
             })
 
-        # Get session and process
-        session = get_or_create_session(session_id)
-        response, metadata = await session.process_user_input(transcript)
+        # LLM
+        llm_first_token_ms: float | None = None
+        if response_mode == "agent":
+            session = get_or_create_session(session_id, business_id=business_id)
+            response, metadata = await session.process_user_input(stt_result.transcript)
+            llm_first_token_ms = metadata.first_token_ms
+        else:
+            from src.services.llm.protocol import StreamMetadata
 
-        # Generate TTS
-        selection = TTSSelection(
-            provider=tts_provider,
-            voice_id=tts_voice_id,
-            model_id=tts_model_id,
-            edge_voice=tts_edge_voice,
-            piper_voice=tts_piper_voice,
+            response = _build_voice_compare_response(stt_result.transcript)
+            metadata = StreamMetadata(model="voice-compare")
+
+        # TTS
+        audio_url, tts_first_chunk_ms = await generate_tts_cartesia(
+            response, session_id=session_id
         )
-        audio_url, provider_used = await generate_tts(response, selection)
+
+        total_ms = round((time.perf_counter() - t_start) * 1000, 1)
 
         return JSONResponse({
-            "transcript": transcript,
+            "transcript": stt_result.transcript,
             "response": response,
             "audio_url": audio_url,
-            "tts_provider_requested": selection.provider,
-            "tts_provider_used": provider_used,
-            "latency_ms": metadata.first_token_ms,
+            "tts_provider_used": "cartesia",
+            "response_mode": response_mode,
+            "stt_latency_ms": stt_result.latency_ms,
+            "llm_first_token_ms": llm_first_token_ms,
+            "tts_first_chunk_ms": tts_first_chunk_ms,
+            "total_ms": total_ms,
+            "detected_language": stt_result.detected_language,
+            "stt_confidence": stt_result.confidence,
             "production_parity": False,
             "notice": NON_PRODUCTION_PARITY_NOTICE,
         })
 
     except Exception as e:
         logger.exception("Voice processing error")
-        return JSONResponse({
-            "error": str(e),
-            "transcript": None,
-            "response": None,
-        }, status_code=500)
+        return JSONResponse(
+            {"error": str(e), "transcript": None, "response": None},
+            status_code=500,
+        )
 
 
 @router.get("/voice/audio/{filename}")
@@ -375,19 +338,11 @@ async def get_audio(filename: str):
 
 @router.post("/voice/tts")
 async def text_to_speech(request: TextToSpeechRequest):
-    """Generate TTS audio from text."""
-    selection = TTSSelection(
-        provider=request.provider,
-        voice_id=request.voice_id,
-        model_id=request.model_id,
-        edge_voice=request.edge_voice,
-        piper_voice=request.piper_voice,
-    )
-    audio_url, provider_used = await generate_tts(request.text, selection)
+    """Generate TTS audio from text using Cartesia Sonic."""
+    audio_url, _ = await generate_tts_cartesia(request.text)
     return JSONResponse({
         "audio_url": audio_url,
-        "tts_provider_requested": selection.provider,
-        "tts_provider_used": provider_used,
+        "tts_provider_used": "cartesia",
         "production_parity": False,
         "notice": NON_PRODUCTION_PARITY_NOTICE,
     })
@@ -411,16 +366,13 @@ class EndSessionResponse(BaseModel):
 async def end_session(request: EndSessionRequest):
     """End a voice test session and persist call log.
 
-    This endpoint:
     1. Creates a CallLog entry with call_source='voice_test'
     2. Queues the analyze_transcript_quality background job
-    3. Cleans up the in-memory session
-
-    Returns the call_log_id for tracking.
+    3. Deletes per-session audio cache files
+    4. Cleans up the in-memory session
     """
     session_id = request.session_id
 
-    # Get session data
     session = _sessions.get(session_id)
     if not session:
         return JSONResponse(
@@ -429,15 +381,12 @@ async def end_session(request: EndSessionRequest):
         )
 
     try:
-        # Get transcript and metrics from session
         transcript = session.get_transcript()
         metrics = session.get_metrics()
         now = datetime.now(UTC)
 
-        # Calculate duration
         duration_seconds = int((now - session.call_start).total_seconds())
 
-        # Create CallLog entry
         async with get_session_context() as db_session:
             call_log = CallLog(
                 id=session.call_id,
@@ -466,7 +415,6 @@ async def end_session(request: EndSessionRequest):
 
             logger.info(f"Created call log for voice test: {call_log.id}")
 
-        # Queue background analysis job
         analysis_queued = False
         if transcript:
             try:
@@ -484,7 +432,14 @@ async def end_session(request: EndSessionRequest):
             except Exception as e:
                 logger.warning(f"Failed to queue analysis job: {e}")
 
-        # Clean up session
+        # Clean up per-session audio files
+        audio_files = _session_audio_files.pop(session_id, [])
+        for wav_path in audio_files:
+            with contextlib.suppress(OSError):
+                wav_path.unlink(missing_ok=True)
+        if audio_files:
+            logger.info(f"Cleaned up {len(audio_files)} audio files for session {session_id}")
+
         await session.close()
         del _sessions[session_id]
 

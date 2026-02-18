@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
@@ -60,6 +61,23 @@ async def init_db() -> None:
 
     async with get_engine().begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        await conn.run_sync(_apply_sqlite_compat_migrations)
+
+
+def _apply_sqlite_compat_migrations(sync_conn) -> None:
+    """Best-effort SQLite compatibility migrations for local/dev environments."""
+    if sync_conn.dialect.name != "sqlite":
+        return
+
+    inspector = inspect(sync_conn)
+    if "businesses" not in inspector.get_table_names():
+        return
+
+    existing = {col["name"] for col in inspector.get_columns("businesses")}
+    if "voice_profile_json" not in existing:
+        sync_conn.execute(text("ALTER TABLE businesses ADD COLUMN voice_profile_json TEXT"))
+    if "rag_profile_json" not in existing:
+        sync_conn.execute(text("ALTER TABLE businesses ADD COLUMN rag_profile_json TEXT"))
 
 
 async def close_db() -> None:

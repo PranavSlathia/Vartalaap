@@ -12,7 +12,6 @@ import {
   useUpdateBusinessApiBusinessBusinessIdPatch,
   getGetBusinessApiBusinessBusinessIdGetQueryKey,
 } from '@/api/endpoints/business/business';
-import { customInstance } from '@/api/mutator/custom-instance';
 import type { BusinessUpdate, ReservationRules } from '@/api/model';
 import { getBusinessId } from '@/lib/business';
 
@@ -22,41 +21,9 @@ interface OperatingHoursForm {
   [key: string]: { open: string; close: string; closed: boolean };
 }
 
-interface VoiceCatalogItem {
-  id: string;
-  name: string;
-  language?: string | null;
-  hindi_recommended: boolean;
-}
-
-interface VoicePreset {
-  id: string;
-  name: string;
-  description: string;
-  provider: 'auto' | 'elevenlabs' | 'piper' | 'edge';
-  voice_id?: string | null;
-  model_id?: string | null;
-  piper_voice?: string | null;
-  edge_voice?: string | null;
-}
-
-interface VoiceOptionsResponse {
-  providers: Array<'auto' | 'elevenlabs' | 'piper' | 'edge'>;
-  provider_status: Record<string, boolean>;
-  elevenlabs_models: VoiceCatalogItem[];
-  elevenlabs_voices: VoiceCatalogItem[];
-  piper_voices: VoiceCatalogItem[];
-  edge_voices: VoiceCatalogItem[];
-  recommended_presets: VoicePreset[];
-}
-
 interface BusinessProfiles {
   voice_profile?: {
-    provider?: string;
     voice_id?: string;
-    model_id?: string;
-    piper_voice?: string;
-    edge_voice?: string;
   };
   rag_profile?: {
     enabled?: boolean;
@@ -97,52 +64,12 @@ export function Settings() {
   const [maxPartySize, setMaxPartySize] = useState(10);
   const [maxPhonePartySize, setMaxPhonePartySize] = useState(10);
   const [greetingText, setGreetingText] = useState('');
-  const [voiceProvider, setVoiceProvider] = useState('auto');
   const [voiceId, setVoiceId] = useState('');
-  const [voiceModelId, setVoiceModelId] = useState('');
-  const [piperVoice, setPiperVoice] = useState('');
-  const [edgeVoice, setEdgeVoice] = useState('');
-  const [voicePresetId, setVoicePresetId] = useState('manual');
-  const [voiceOptions, setVoiceOptions] = useState<VoiceOptionsResponse | null>(null);
-  const [voiceOptionsLoading, setVoiceOptionsLoading] = useState(false);
-  const [voiceOptionsError, setVoiceOptionsError] = useState<string | null>(null);
   const [ragEnabled, setRagEnabled] = useState(true);
   const [ragMaxResults, setRagMaxResults] = useState(5);
   const [ragMinScore, setRagMinScore] = useState(0.3);
   const [operatingHours, setOperatingHours] = useState<OperatingHoursForm>({});
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadVoiceOptions = async () => {
-      setVoiceOptionsLoading(true);
-      setVoiceOptionsError(null);
-      try {
-        const result = await customInstance<VoiceOptionsResponse>({
-          url: `/api/business/${businessId}/voice-options`,
-          method: 'GET',
-        });
-        if (!cancelled) {
-          setVoiceOptions(result);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          const message = err instanceof Error ? err.message : 'Failed to load voice options';
-          setVoiceOptionsError(message);
-        }
-      } finally {
-        if (!cancelled) {
-          setVoiceOptionsLoading(false);
-        }
-      }
-    };
-
-    void loadVoiceOptions();
-    return () => {
-      cancelled = true;
-    };
-  }, [businessId]);
 
   // Initialize form when data loads
   useEffect(() => {
@@ -157,12 +84,7 @@ export function Settings() {
       const voiceProfile = profiles.voice_profile;
       const ragProfile = profiles.rag_profile;
 
-      setVoiceProvider(voiceProfile?.provider ?? 'auto');
       setVoiceId(voiceProfile?.voice_id ?? '');
-      setVoiceModelId(voiceProfile?.model_id ?? '');
-      setPiperVoice(voiceProfile?.piper_voice ?? '');
-      setEdgeVoice(voiceProfile?.edge_voice ?? '');
-      setVoicePresetId('manual');
 
       setRagEnabled(ragProfile?.enabled ?? true);
       setRagMaxResults(ragProfile?.max_results ?? 5);
@@ -220,11 +142,7 @@ export function Settings() {
       reservation_rules: reservationRules,
       greeting_text: greetingText || undefined,
       voice_profile: {
-        provider: voiceProvider,
         voice_id: voiceId || undefined,
-        model_id: voiceModelId || undefined,
-        piper_voice: piperVoice || undefined,
-        edge_voice: edgeVoice || undefined,
       },
       rag_profile: {
         enabled: ragEnabled,
@@ -234,24 +152,6 @@ export function Settings() {
     };
 
     updateMutation.mutate({ businessId, data: update });
-  };
-
-  const handleVoicePresetChange = (presetId: string) => {
-    setVoicePresetId(presetId);
-    if (presetId === 'manual') {
-      return;
-    }
-
-    const preset = voiceOptions?.recommended_presets.find((p) => p.id === presetId);
-    if (!preset) {
-      return;
-    }
-
-    setVoiceProvider(preset.provider);
-    setVoiceId(preset.voice_id ?? '');
-    setVoiceModelId(preset.model_id ?? '');
-    setPiperVoice(preset.piper_voice ?? '');
-    setEdgeVoice(preset.edge_voice ?? '');
   };
 
   const handleHoursChange = (day: string, field: 'open' | 'close', value: string) => {
@@ -267,13 +167,6 @@ export function Settings() {
       [day]: { ...prev[day], closed: !prev[day]?.closed },
     }));
   };
-
-  const availableProviders = voiceOptions?.providers ?? ['auto', 'elevenlabs', 'piper'];
-  const providerStatus = voiceOptions?.provider_status ?? {};
-  const elevenlabsModels = voiceOptions?.elevenlabs_models ?? [];
-  const elevenlabsVoices = voiceOptions?.elevenlabs_voices ?? [];
-  const piperVoices = voiceOptions?.piper_voices ?? [];
-  const edgeVoices = voiceOptions?.edge_voices ?? [];
 
   if (isLoading) {
     return (
@@ -520,6 +413,29 @@ export function Settings() {
                 This greeting is spoken when a customer calls.
               </p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="voice-id">Cartesia Voice ID</Label>
+              <Input
+                id="voice-id"
+                value={voiceId}
+                onChange={(e) => setVoiceId(e.target.value)}
+                placeholder="a0e99841-438c-4a64-b679-ae501e7d6091"
+              />
+              <p className="text-xs text-muted-foreground">
+                Cartesia voice UUID from{' '}
+                <a
+                  href="https://play.cartesia.ai/voices"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  play.cartesia.ai/voices
+                </a>
+                . Leave blank to use the server default.
+              </p>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-3 pt-4 border-t">
               <div className="space-y-1">
                 <p className="text-sm font-medium">STT Engine</p>
@@ -530,145 +446,10 @@ export function Settings() {
                 <p className="text-sm text-muted-foreground">Groq Llama 3.3 70B</p>
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-medium">Voice Catalog</p>
-                <p className="text-sm text-muted-foreground">
-                  {voiceOptionsLoading
-                    ? 'Loading providers...'
-                    : voiceOptionsError
-                      ? 'Using local fallback options'
-                      : 'Live catalog loaded'}
-                </p>
+                <p className="text-sm font-medium">TTS Provider</p>
+                <p className="text-sm text-muted-foreground">Cartesia sonic-multilingual</p>
               </div>
             </div>
-
-            <div className="space-y-2 pt-2">
-              <Label htmlFor="voice-preset">Testing Preset</Label>
-              <select
-                id="voice-preset"
-                className="w-full h-9 px-3 border rounded-md text-sm"
-                value={voicePresetId}
-                onChange={(e) => handleVoicePresetChange(e.target.value)}
-              >
-                <option value="manual">Manual (Custom)</option>
-                {(voiceOptions?.recommended_presets ?? []).map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </select>
-              {voicePresetId !== 'manual' && (
-                <p className="text-xs text-muted-foreground">
-                  {voiceOptions?.recommended_presets.find((preset) => preset.id === voicePresetId)?.description}
-                </p>
-              )}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="voice-provider">TTS Provider</Label>
-                <select
-                  id="voice-provider"
-                  className="w-full h-9 px-3 border rounded-md text-sm"
-                  value={voiceProvider}
-                  onChange={(e) => setVoiceProvider(e.target.value)}
-                >
-                  {availableProviders.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider === 'auto' ? 'Auto (fallback chain)' : provider}
-                    </option>
-                  ))}
-                </select>
-                {providerStatus[voiceProvider] === false && (
-                  <p className="text-xs text-amber-600">
-                    This provider is currently not available in runtime settings.
-                  </p>
-                )}
-              </div>
-
-              {voiceProvider === 'elevenlabs' && (
-                <div className="space-y-2">
-                  <Label htmlFor="voice-model">ElevenLabs Model</Label>
-                  <select
-                    id="voice-model"
-                    className="w-full h-9 px-3 border rounded-md text-sm"
-                    value={voiceModelId}
-                    onChange={(e) => setVoiceModelId(e.target.value)}
-                  >
-                    <option value="">Default model</option>
-                    {voiceModelId && !elevenlabsModels.some((model) => model.id === voiceModelId) && (
-                      <option value={voiceModelId}>Custom ({voiceModelId})</option>
-                    )}
-                    {elevenlabsModels.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.name}{model.hindi_recommended ? ' (Hindi-ready)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {voiceProvider === 'piper' && (
-                <div className="space-y-2">
-                  <Label htmlFor="piper-voice">Piper Voice</Label>
-                  <select
-                    id="piper-voice"
-                    className="w-full h-9 px-3 border rounded-md text-sm"
-                    value={piperVoice}
-                    onChange={(e) => setPiperVoice(e.target.value)}
-                  >
-                    <option value="">Default Piper voice</option>
-                    {piperVoices.map((voice) => (
-                      <option key={voice.id} value={voice.id}>
-                        {voice.name}{voice.hindi_recommended ? ' (Hindi)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {voiceProvider === 'edge' && (
-                <div className="space-y-2">
-                  <Label htmlFor="edge-voice">Edge Voice</Label>
-                  <select
-                    id="edge-voice"
-                    className="w-full h-9 px-3 border rounded-md text-sm"
-                    value={edgeVoice}
-                    onChange={(e) => setEdgeVoice(e.target.value)}
-                  >
-                    <option value="">Default Edge voice</option>
-                    {edgeVoices.map((voice) => (
-                      <option key={voice.id} value={voice.id}>
-                        {voice.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {voiceProvider === 'elevenlabs' && (
-              <div className="space-y-2">
-                <Label htmlFor="voice-id">ElevenLabs Voice</Label>
-                <select
-                  id="voice-id"
-                  className="w-full h-9 px-3 border rounded-md text-sm"
-                  value={voiceId}
-                  onChange={(e) => setVoiceId(e.target.value)}
-                >
-                  <option value="">Default voice</option>
-                  {voiceId && !elevenlabsVoices.some((voice) => voice.id === voiceId) && (
-                    <option value={voiceId}>Custom ({voiceId})</option>
-                  )}
-                  {elevenlabsVoices.map((voice) => (
-                    <option key={voice.id} value={voice.id}>
-                      {voice.name}
-                      {voice.language ? ` (${voice.language})` : ''}
-                      {voice.hindi_recommended ? ' • Hindi-ready' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             <div className="space-y-2">
               <Label htmlFor="rag-max-results">RAG Max Results</Label>
@@ -704,7 +485,7 @@ export function Settings() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Voice provider and RAG settings are saved per business.
+              Voice and RAG settings are saved per business.
             </p>
           </CardContent>
         </Card>
